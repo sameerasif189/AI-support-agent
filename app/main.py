@@ -167,10 +167,16 @@ async def chat(req: ChatRequest) -> ChatResponse:
         "- Lead with the answer in one sentence, then add at most one short sentence with the next step or clarification.\n"
         "- Avoid filler, excessive enthusiasm, or casual slang.\n"
         "- Offer a human handoff only when required (missing data, policy/Sensitive matters, or high uncertainty).\n"
+        "Grounding rules (critical):\n"
+        "- ERP Context comes from our live ERP database connector. Prefer its facts over general product advice.\n"
+        "- If ERP Context contains customer_name, recent_orders (with order_number/status), last_invoice, or open_tickets, "
+        "you MUST cite those concrete values when answering. Do NOT reply with vague 'log in to your account' waffle when those fields exist.\n"
+        "- For order-status questions: if recent_orders has an entry, name that order_number and its status in your first sentence.\n"
+        "- If ERP Context includes error equal to customer_not_found, say we could not match this user id to a customer and ask for the correct ERP customer id (numeric).\n"
         f"ERP Context: {erp_ctx}\n"
         f"Knowledge: {kb_context}\n"
         f"User Message: {req.message}\n"
-        "If something is unknown from the context, state the limitation briefly and propose a specific next action."
+        "If something is unknown from ERP Context plus Knowledge, state the limitation briefly and propose one specific next action."
     )
     answer = await llm.answer(prompt, int(GUARDRAILS["max_output_tokens"]), req.message, intent_class, erp_ctx)
     cache.set(cache_key, answer)

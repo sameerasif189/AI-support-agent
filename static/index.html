@@ -131,7 +131,8 @@
       const channelEl = document.getElementById("channelSelect");
       const sendBtn = document.getElementById("sendBtn");
       const budgetBadge = document.getElementById("budgetBadge");
-      const userId = "demo-user-1";
+      /** Numeric IDs 1–25 match seeded Neon customers */
+      const userId = "1";
 
       function addMessage(role, text, meta = "") {
         const wrap = document.createElement("div");
@@ -166,21 +167,52 @@
         inputEl.value = "";
         sendBtn.disabled = true;
 
+        const ac = new AbortController();
+        const t = window.setTimeout(() => ac.abort(), 20000);
+
         try {
           const res = await fetch("/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: userId, channel, message })
+            body: JSON.stringify({ user_id: userId, channel, message }),
+            signal: ac.signal
           });
-          const data = await res.json();
+
+          window.clearTimeout(t);
+
+          const text = await res.text();
+          let data = {};
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch {
+            addMessage("bot", `Server error (${res.status}).`, text.slice(0, 280));
+            return;
+          }
+
+          if (!res.ok) {
+            const detail =
+              typeof data.detail === "string"
+                ? data.detail
+                : Array.isArray(data.detail)
+                  ? JSON.stringify(data.detail)
+                  : res.statusText;
+            addMessage("bot", "Request failed.", `HTTP ${res.status}: ${detail || "unknown error"}`);
+            return;
+          }
+
           addMessage(
             "bot",
             data.answer || "No response",
             `action: ${data.action} | confidence: ${data.confidence} | est cost: $${data.est_cost_usd}`
           );
-        } catch {
-          addMessage("bot", "Unable to reach the API. Check if server is running.");
+        } catch (err) {
+          if (err && err.name === "AbortError") {
+            addMessage("bot", "That took too long and timed out. Try again, or POST /chat from /docs to compare.");
+          } else {
+            addMessage("bot", "Unable to reach the API. Check Deployment logs in Vercel.");
+          }
         } finally {
+          window.clearTimeout(t);
           sendBtn.disabled = false;
           refreshBudget();
         }
