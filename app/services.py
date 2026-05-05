@@ -192,8 +192,26 @@ class LLMClient:
             "max_tokens": max_output_tokens,
         }
         headers = {"Authorization": f"Bearer {LLM_API_KEY}"}
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.post(f"{LLM_API_BASE}/chat/completions", json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
+        # Keep well under typical Vercel Hobby function limits (~10s) so the browser does not hang.
+        timeout = httpx.Timeout(7.0, connect=4.0)
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(f"{LLM_API_BASE}/chat/completions", json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                choices = data.get("choices") or []
+                if not choices:
+                    logger.warning("LLM response missing choices, using local fallback")
+                    return self._local_fallback_answer(user_message, intent_class, erp_ctx)
+                msg_obj = choices[0].get("message") or {}
+                raw = msg_obj.get("content")
+                if isinstance(raw, str) and raw.strip():
+                    return raw.strip()
+                logger.warning(
+                    "LLM returned empty/null content (finish_reason=%s), using local fallback",
+                    choices[0].get("finish_reason"),
+                )
+                return self._local_fallback_answer(user_message, intent_class, erp_ctx)
+        except Exception as exc:
+            logger.warning("LLM request failed, using local fallback: %s", exc)
+            return self._local_fallback_answer(user_message, intent_class, erp_ctx)
