@@ -1,0 +1,30 @@
+{
+  "auto_answer": [
+    "faq_pricing",
+    "faq_reset_password",
+    "faq_business_hours",
+    "faq_refund_policy",
+    "faq_invoice_copy"
+  ],
+  "erp_lookup": [
+    "erp_order_status",
+    "erp_invoice_status",
+    "erp_account_plan",
+    "erp_ticket_status",
+    "erp_payment_status"
+  ],
+  "human_required": [
+    "security_issue",
+    "legal_request",
+    "account_lockout",
+    "billing_dispute",
+    "data_deletion_request"
+  ],
+  "sensitive_keywords": [
+    "hack",
+    "breach",
+    "delete account",
+    "lawsuit",
+    "fraud"
+  ]
+}

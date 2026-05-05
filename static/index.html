@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ERP AI Support Demo</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --panel2: #1f2937;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --primary: #3b82f6;
+        --bot: #1d4ed8;
+        --user: #334155;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Inter, Segoe UI, Arial, sans-serif;
+        background: linear-gradient(160deg, var(--bg), #020617);
+        color: var(--text);
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+      }
+      .app {
+        width: min(900px, 100%);
+        height: min(90vh, 760px);
+        background: rgba(17, 24, 39, 0.9);
+        border: 1px solid #233045;
+        border-radius: 16px;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        overflow: hidden;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 16px;
+        background: rgba(15, 23, 42, 0.9);
+        border-bottom: 1px solid #233045;
+      }
+      .title { font-weight: 700; }
+      .badge {
+        background: #0b3a8f;
+        color: #dbeafe;
+        font-size: 12px;
+        padding: 6px 10px;
+        border-radius: 999px;
+      }
+      .messages {
+        padding: 16px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .msg {
+        max-width: 78%;
+        border-radius: 12px;
+        padding: 10px 12px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+      }
+      .msg.user {
+        align-self: flex-end;
+        background: var(--user);
+      }
+      .msg.bot {
+        align-self: flex-start;
+        background: var(--bot);
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 6px;
+      }
+      .composer {
+        border-top: 1px solid #233045;
+        padding: 12px;
+        background: rgba(15, 23, 42, 0.9);
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 10px;
+      }
+      input, select, button {
+        border-radius: 10px;
+        border: 1px solid #334155;
+        background: var(--panel2);
+        color: var(--text);
+        padding: 10px 12px;
+      }
+      button {
+        background: var(--primary);
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="header">
+        <div>
+          <div class="title">ERP AI Support Agent Demo</div>
+          <div class="meta">Natural replies + Web/WhatsApp/Slack-compatible backend</div>
+        </div>
+        <div class="badge" id="budgetBadge">Budget: loading...</div>
+      </div>
+      <div class="messages" id="messages"></div>
+      <form class="composer" id="chatForm">
+        <input id="messageInput" type="text" placeholder="Ask about invoice, order status, account, tickets..." />
+        <select id="channelSelect">
+          <option value="web">web</option>
+          <option value="whatsapp">whatsapp</option>
+          <option value="slack">slack</option>
+        </select>
+        <button id="sendBtn" type="submit">Send</button>
+      </form>
+    </div>
+
+    <script>
+      const messagesEl = document.getElementById("messages");
+      const formEl = document.getElementById("chatForm");
+      const inputEl = document.getElementById("messageInput");
+      const channelEl = document.getElementById("channelSelect");
+      const sendBtn = document.getElementById("sendBtn");
+      const budgetBadge = document.getElementById("budgetBadge");
+      const userId = "demo-user-1";
+
+      function addMessage(role, text, meta = "") {
+        const wrap = document.createElement("div");
+        wrap.className = `msg ${role}`;
+        wrap.textContent = text;
+        if (meta) {
+          const m = document.createElement("div");
+          m.className = "meta";
+          m.textContent = meta;
+          wrap.appendChild(m);
+        }
+        messagesEl.appendChild(wrap);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      async function refreshBudget() {
+        try {
+          const r = await fetch("/metrics/budget");
+          const d = await r.json();
+          budgetBadge.textContent = `Budget: $${d.total_usd.toFixed(4)} / $${d.budget_usd}`;
+        } catch {
+          budgetBadge.textContent = "Budget: unavailable";
+        }
+      }
+
+      formEl.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const message = inputEl.value.trim();
+        if (!message) return;
+        const channel = channelEl.value;
+        addMessage("user", message, `channel: ${channel}`);
+        inputEl.value = "";
+        sendBtn.disabled = true;
+
+        try {
+          const res = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: userId, channel, message })
+          });
+          const data = await res.json();
+          addMessage(
+            "bot",
+            data.answer || "No response",
+            `action: ${data.action} | confidence: ${data.confidence} | est cost: $${data.est_cost_usd}`
+          );
+        } catch {
+          addMessage("bot", "Unable to reach the API. Check if server is running.");
+        } finally {
+          sendBtn.disabled = false;
+          refreshBudget();
+        }
+      });
+
+      addMessage("bot", "Hi! I can help with invoices, order status, account details, and tickets. What do you need?");
+      refreshBudget();
+    </script>
+  </body>
+  </html>
