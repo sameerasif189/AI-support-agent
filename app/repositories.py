@@ -7,11 +7,15 @@ from typing import Any, Dict, List, Optional, Tuple
 from .models import RetrievalChunk
 
 
-def parse_customer_id(user_id: str) -> int:
+def is_admin_user(user_id: str) -> bool:
+    return str(user_id).strip().lower() == "admin"
+
+
+def parse_customer_id(user_id: str) -> Optional[int]:
     try:
         return int(str(user_id).strip())
     except (TypeError, ValueError):
-        return 1
+        return None
 
 
 async def get_customer_row(pool: Any, customer_id: int) -> Optional[Dict[str, Any]]:
@@ -34,7 +38,62 @@ async def get_customer_row(pool: Any, customer_id: int) -> Optional[Dict[str, An
 
 
 async def get_customer_context(pool: Any, user_id: str, query_text: str) -> Dict[str, Any]:
+    if is_admin_user(user_id):
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("SELECT COUNT(*) FROM customers")
+                total_customers = int((await cur.fetchone())[0])
+                await cur.execute("SELECT COUNT(*) FROM orders")
+                total_orders = int((await cur.fetchone())[0])
+                await cur.execute("SELECT COUNT(*) FROM invoices WHERE status <> 'paid'")
+                unpaid_invoices = int((await cur.fetchone())[0])
+                await cur.execute("SELECT COUNT(*) FROM support_tickets WHERE status IN ('open', 'pending')")
+                open_tickets = int((await cur.fetchone())[0])
+                await cur.execute(
+                    """
+                    SELECT o.order_number, o.status, o.total, o.created_at, c.name
+                    FROM orders o
+                    JOIN customers c ON c.id = o.customer_id
+                    ORDER BY o.created_at DESC
+                    LIMIT 5
+                    """
+                )
+                recent_orders = []
+                for r in await cur.fetchall():
+                    recent_orders.append(
+                        {
+                            "order_number": r[0],
+                            "status": r[1],
+                            "total": float(r[2]) if r[2] is not None else 0,
+                            "created_at": r[3].isoformat() if r[3] else None,
+                            "customer_name": r[4],
+                        }
+                    )
+        return {
+            "user_id": user_id,
+            "resolved_customer_id": None,
+            "customer_name": "Admin",
+            "role": "admin",
+            "scope": "global",
+            "account_tier": "enterprise",
+            "recent_orders": recent_orders,
+            "open_tickets": open_tickets,
+            "global_totals": {
+                "customers": total_customers,
+                "orders": total_orders,
+                "unpaid_invoices": unpaid_invoices,
+            },
+            "query": query_text,
+        }
+
     cid = parse_customer_id(user_id)
+    if cid is None:
+        return {
+            "user_id": user_id,
+            "resolved_customer_id": None,
+            "error": "invalid_customer_id",
+            "query": query_text,
+        }
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
@@ -116,7 +175,11 @@ async def get_customer_context(pool: Any, user_id: str, query_text: str) -> Dict
 
 
 async def create_support_ticket(pool: Any, user_id: str, summary: str) -> str:
+    if is_admin_user(user_id):
+        raise ValueError("admin_ticket_requires_customer_id")
     cid = parse_customer_id(user_id)
+    if cid is None:
+        raise ValueError("invalid_customer_id")
     async with pool.connection() as conn:
         async with conn.transaction():
             async with conn.cursor() as cur:
@@ -237,7 +300,33 @@ async def list_orders_for_customer(pool: Any, customer_id: int, limit: int = 50)
 
 
 async def list_unpaid_invoices(pool: Any, user_id: str) -> List[Dict[str, Any]]:
+    if is_admin_user(user_id):
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    SELECT i.invoice_number, i.status, i.amount, i.due_date, o.order_number
+                    FROM invoices i
+                    JOIN orders o ON o.id = i.order_id
+                    WHERE i.status NOT IN ('paid')
+                    ORDER BY i.due_date ASC
+                    """
+                )
+                rows = await cur.fetchall()
+        return [
+            {
+                "invoice_number": r[0],
+                "status": r[1],
+                "amount": float(r[2]) if r[2] is not None else 0,
+                "due_date": r[3].isoformat() if r[3] else None,
+                "order_number": r[4],
+            }
+            for r in rows
+        ]
+
     cid = parse_customer_id(user_id)
+    if cid is None:
+        return []
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(

@@ -1,6 +1,7 @@
 import datetime as dt
 import hashlib
 import logging
+import re
 from collections import defaultdict
 from typing import Dict, List, Tuple
 
@@ -133,12 +134,36 @@ class AnswerCache:
 
 
 class LLMClient:
+    @staticmethod
+    def _sanitize_answer(answer: str) -> str:
+        text = answer.strip()
+        if re.search(r"\badmin\b", text, flags=re.IGNORECASE):
+            text = re.sub(r"^\s*(hello|hi|hey)\s+[A-Za-z][A-Za-z\s'-]{0,40},?\s*", "Hello Admin, ", text, flags=re.IGNORECASE)
+            if not re.match(r"^\s*hello admin,", text, flags=re.IGNORECASE):
+                text = f"Hello Admin, {text}"
+            return text.strip()
+        # Keep replies neutral: do not greet with customer names by default.
+        text = re.sub(r"^\s*(hello|hi|hey)\s+[A-Za-z][A-Za-z\s'-]{0,40},?\s*", "", text, flags=re.IGNORECASE)
+        # Avoid generic login instructions in authenticated support flows.
+        text = re.sub(
+            r"log(?:\s*in|\s*into)\s+to\s+your\s+account",
+            "open your Orders page",
+            text,
+            flags=re.IGNORECASE,
+        )
+        return text.strip() or answer.strip()
+
     def __init__(self) -> None:
         self.enabled = bool(LLM_API_KEY and LLM_API_KEY.strip() and LLM_API_KEY != "replace-me")
 
     @staticmethod
     def _local_fallback_answer(user_message: str, intent_class: str, erp_ctx: dict) -> str:
         text = user_message.lower()
+        if erp_ctx.get("error") == "invalid_customer_id":
+            return (
+                "I could not verify your account because the customer id format is invalid. "
+                "Please sign in again and use a numeric ERP customer id."
+            )
         if erp_ctx.get("error") == "customer_not_found":
             return (
                 "I could not find an account for this user id. "
@@ -206,7 +231,7 @@ class LLMClient:
                 msg_obj = choices[0].get("message") or {}
                 raw = msg_obj.get("content")
                 if isinstance(raw, str) and raw.strip():
-                    return raw.strip()
+                    return self._sanitize_answer(raw)
                 logger.warning(
                     "LLM returned empty/null content (finish_reason=%s), using local fallback",
                     choices[0].get("finish_reason"),

@@ -84,7 +84,7 @@
         padding: 12px;
         background: rgba(15, 23, 42, 0.9);
         display: grid;
-        grid-template-columns: 1fr auto auto;
+        grid-template-columns: 140px 1fr auto auto;
         gap: 10px;
       }
       input, select, button {
@@ -114,6 +114,7 @@
       </div>
       <div class="messages" id="messages"></div>
       <form class="composer" id="chatForm">
+        <input id="userIdInput" type="text" placeholder="Customer ID or admin" />
         <input id="messageInput" type="text" placeholder="Ask about invoice, order status, account, tickets..." />
         <select id="channelSelect">
           <option value="web">web</option>
@@ -128,11 +129,12 @@
       const messagesEl = document.getElementById("messages");
       const formEl = document.getElementById("chatForm");
       const inputEl = document.getElementById("messageInput");
+      const userIdEl = document.getElementById("userIdInput");
       const channelEl = document.getElementById("channelSelect");
       const sendBtn = document.getElementById("sendBtn");
       const budgetBadge = document.getElementById("budgetBadge");
-      /** Numeric IDs 1–25 match seeded Neon customers */
-      const userId = "1";
+      const USER_ID_STORAGE_KEY = "erp_demo_user_id";
+      userIdEl.value = window.localStorage.getItem(USER_ID_STORAGE_KEY) || "";
 
       function addMessage(role, text, meta = "") {
         const wrap = document.createElement("div");
@@ -162,6 +164,12 @@
         e.preventDefault();
         const message = inputEl.value.trim();
         if (!message) return;
+        const userId = userIdEl.value.trim();
+        if (!/^\d+$/.test(userId) && userId.toLowerCase() !== "admin") {
+          addMessage("bot", "Please enter a numeric customer ID or 'admin' before sending.");
+          return;
+        }
+        window.localStorage.setItem(USER_ID_STORAGE_KEY, userId);
         const channel = channelEl.value;
         addMessage("user", message, `channel: ${channel}`);
         inputEl.value = "";
