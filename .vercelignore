@@ -1,0 +1,14 @@
+.env
+.venv/
+venv/
+models/
+*.gguf
+*.pdf
+*.docx
+__pycache__/
+.git/
+.idea/
+.vscode/
+Client_*.pdf
+generate_*.py
+generate_*.ps1

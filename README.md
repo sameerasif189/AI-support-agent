@@ -5,7 +5,8 @@ Budget-controlled AI support backend for an existing ERP website with web, Whats
 ## What is implemented
 
 - Intent policy and escalation guardrails
-- KB retrieval from `kb_articles` (Postgres) with static fallback if `DATABASE_URL` is unset
+- **Full RAG on Neon**: chunking → OpenAI-compatible embeddings → **pgvector** (`knowledge_chunks`) → hybrid vector + FTS retrieval at chat time; customer memory + ERP SQL unchanged
+- KB retrieval fallback: token overlap if DB/vector unavailable; static fallback if `DATABASE_URL` is unset
 - ERP context from linked tables: customers, orders, order_items, products, invoices, support_tickets
 - LLM routing (Groq or any OpenAI-compatible API) with local fallback when no API key
 - Answer caching and monthly budget tracking
@@ -34,11 +35,27 @@ Budget-controlled AI support backend for an existing ERP website with web, Whats
    psql "$DATABASE_URL" -f scripts/init_schema.sql
    ```
 
-3. Seed synthetic data:
+   Existing databases created before the KB RAG column was added should run once:
+
+   ```bash
+   psql "$DATABASE_URL" -f scripts/migrate_kb_rag_fts.sql
+   psql "$DATABASE_URL" -f scripts/migrate_customer_memory.sql
+   psql "$DATABASE_URL" -f scripts/migrate_pgvector_rag.sql
+   ```
+
+3. Set **embedding** credentials (Groq does not provide embeddings; use OpenAI or compatible):
+
+   ```env
+   EMBEDDING_API_KEY=sk-...
+   EMBEDDING_MODEL=text-embedding-3-small
+   ```
+
+4. Seed synthetic data:
 
    ```bash
    set DATABASE_URL=postgresql://...
    python scripts/seed_db.py
+   python scripts/reindex_vector_rag.py
    ```
 
 Tables: `customers` (25), `products` (30), `orders` (40), `order_items` (~80+), `invoices` (40), `support_tickets` (30), `kb_articles` (25).
@@ -70,7 +87,10 @@ Use `user_id` as the numeric **customer id** from the seeded data (e.g. `"1"` �
 
 1. Push the repo and import the project in Vercel.
 2. Set environment variables: `DATABASE_URL`, `LLM_API_BASE`, `LLM_API_KEY`, `LLM_MODEL` (same as `.env.example`).
-3. Deploy. The ASGI app is exposed via `api/index.py` per `vercel.json`.
+3. For WhatsApp demo also set `WHATSAPP_*` vars and `LLM_ORDER=api`, `RAG_FEED_SYNC_ENABLED=false`.
+4. Deploy. The ASGI app is exposed via `api/index.py` per `vercel.json`.
+
+**WhatsApp on Vercel:** step-by-step in [`docs/vercel_whatsapp_demo.md`](docs/vercel_whatsapp_demo.md). Env template: `vercel.env.example`. Local DB prep: `scripts/setup_vercel_whatsapp_demo.ps1`. Smoke: `scripts/smoke_whatsapp.ps1 -BaseUrl https://your-app.vercel.app`.
 
 **Note:** Serverless cold starts and static file serving differ from local `uvicorn`; verify `/` and `/static` in your target environment.
 

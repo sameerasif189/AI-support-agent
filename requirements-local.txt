@@ -1,0 +1,6 @@
+# Native GPU (llama.cpp). Install after requirements.txt:
+#   pip install -r requirements-local.txt --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+llama-cpp-python>=0.3.23
+huggingface_hub>=0.26.0
+nvidia-cublas-cu12
+nvidia-cuda-runtime-cu12

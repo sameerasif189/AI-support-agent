@@ -1,4 +1,8 @@
 .env
+.vercel/
+models/*.gguf
+Client_*.pdf
+*.docx
 __pycache__/
 *.py[cod]
 *.pyo

@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Populate Neon Postgres with deterministic synthetic ERP data (~270 rows).
+"""Populate Neon Postgres with ~500 linked ERP rows + demo login users.
 
 Usage:
   set DATABASE_URL=postgresql://...
   python scripts/seed_db.py
+
+Login: password = user's first name (case-insensitive).
+  admin / Admin
+  agent / Morgan
+  cust1 / Alex  (customer id 1)
 """
 
 from __future__ import annotations
@@ -11,8 +16,24 @@ from __future__ import annotations
 import os
 import random
 from datetime import date, timedelta
+from pathlib import Path
 
 import psycopg
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:
+    pass
+
+# Target ~500 rows across core tables (excluding sessions / runtime RAG uploads)
+N_CUSTOMERS = 50
+N_PRODUCTS = 40
+N_ORDERS = 80
+N_TICKETS = 50
+N_KB = 30
+# order_items ≈ 2 per order → 160; invoices = 80 → total 50+40+80+160+80+50+30+10 users = 500
 
 
 def main() -> None:
@@ -22,8 +43,14 @@ def main() -> None:
 
     random.seed(42)
 
-    first_names = ["Alex", "Jordan", "Sam", "Taylor", "Casey", "Riley", "Morgan", "Quinn", "Avery", "Jamie"]
-    last_names = ["Smith", "Jones", "Lee", "Brown", "Wong", "Patel", "Singh", "Khan", "Ali", "Chen"]
+    first_names = [
+        "Alex", "Jordan", "Sam", "Taylor", "Casey", "Riley", "Morgan", "Quinn",
+        "Avery", "Jamie", "Drew", "Blake", "Cameron", "Dakota", "Emery", "Finley",
+    ]
+    last_names = [
+        "Smith", "Jones", "Lee", "Brown", "Wong", "Patel", "Singh", "Khan",
+        "Ali", "Chen", "Garcia", "Miller", "Davis", "Wilson", "Moore", "Taylor",
+    ]
     tiers = ["starter", "professional", "enterprise"]
     product_cats = ["Hardware", "Software", "Services", "Consumables"]
     order_statuses = ["pending", "processing", "shipped", "delivered", "cancelled"]
@@ -33,13 +60,15 @@ def main() -> None:
 
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
-            cur.execute("TRUNCATE order_items, invoices, orders, support_tickets, kb_articles, products, customers RESTART IDENTITY CASCADE")
+            cur.execute(
+                "TRUNCATE app_sessions, rag_documents, app_users, order_items, invoices, "
+                "orders, support_tickets, kb_articles, products, customers RESTART IDENTITY CASCADE"
+            )
 
-            # 25 customers
-            customers = []
-            for i in range(1, 26):
+            customers: list[tuple[int, str]] = []
+            for i in range(1, N_CUSTOMERS + 1):
                 fn = first_names[i % len(first_names)]
-                ln = last_names[i % len(last_names)]
+                ln = last_names[(i * 2) % len(last_names)]
                 name = f"{fn} {ln}"
                 email = f"user{i}@example.com"
                 tier = tiers[i % len(tiers)]
@@ -47,11 +76,11 @@ def main() -> None:
                     "INSERT INTO customers (name, email, tier) VALUES (%s, %s, %s) RETURNING id",
                     (name, email, tier),
                 )
-                customers.append(cur.fetchone()[0])
+                cid = cur.fetchone()[0]
+                customers.append((cid, fn))
 
-            # 30 products
             products = []
-            for i in range(1, 31):
+            for i in range(1, N_PRODUCTS + 1):
                 sku = f"SKU-{1000 + i}"
                 cat = product_cats[i % len(product_cats)]
                 price = round(10 + (i * 7.5) % 500 + random.random() * 5, 2)
@@ -61,11 +90,9 @@ def main() -> None:
                 )
                 products.append(cur.fetchone()[0])
 
-            # 40 orders + ~80 order_items + 40 invoices
-            orders_ids = []
-            base_date = date.today() - timedelta(days=120)
-            for o in range(1, 41):
-                cid = customers[(o * 3) % len(customers)]
+            base_date = date.today() - timedelta(days=365)
+            for o in range(1, N_ORDERS + 1):
+                cid = customers[(o * 3) % len(customers)][0]
                 order_number = f"ORD-{10400 + o}"
                 status = order_statuses[o % len(order_statuses)]
                 created = base_date + timedelta(days=o * 2 + (o % 5))
@@ -78,12 +105,11 @@ def main() -> None:
                     (cid, order_number, status, 0, created),
                 )
                 oid = cur.fetchone()[0]
-                orders_ids.append((oid, cid, created))
 
                 n_lines = 2 if o % 3 != 0 else 3
                 line_total = 0.0
-                for _ in range(n_lines):
-                    pid = products[(o + _) % len(products)]
+                for li in range(n_lines):
+                    pid = products[(o + li) % len(products)]
                     qty = 1 + (o % 4)
                     cur.execute("SELECT price FROM products WHERE id = %s", (pid,))
                     unit = float(cur.fetchone()[0])
@@ -108,7 +134,6 @@ def main() -> None:
                     (oid, inv_num, inv_status, round(line_total, 2), due),
                 )
 
-            # 30 support tickets
             subjects = [
                 "Cannot download invoice PDF",
                 "Order delayed — need ETA",
@@ -119,8 +144,8 @@ def main() -> None:
                 "Need VAT breakdown",
                 "Refund status",
             ]
-            for t in range(1, 31):
-                cid = customers[t % len(customers)]
+            for t in range(1, N_TICKETS + 1):
+                cid = customers[t % len(customers)][0]
                 subj = subjects[t % len(subjects)]
                 st = ticket_statuses[t % len(ticket_statuses)]
                 cat = ticket_categories[t % len(ticket_categories)]
@@ -133,43 +158,51 @@ def main() -> None:
                     (cid, subj, st, cat, created),
                 )
 
-            # 25 KB articles (ERP documentation)
-            articles = [
-                ("How to download an invoice", "Open Billing > Invoices and click Download PDF next to the invoice row.", "faq"),
-                ("Order status meanings", "Pending: not shipped. Processing: packing. Shipped: in transit. Delivered: completed.", "faq"),
-                ("Payment methods", "We accept card, ACH, and wire for enterprise accounts.", "policy"),
-                ("Refund policy", "Refunds are processed within 5–10 business days after approval.", "policy"),
-                ("Account deletion", "Account deletion requires identity verification by a human agent.", "policy"),
-                ("Support channels", "Reach us via web chat, WhatsApp, or Slack integrations.", "faq"),
-                ("Tax and VAT", "VAT appears on invoice once billing country is verified.", "faq"),
-                ("Multi-currency", "Invoices default to account currency; FX rates apply at billing time.", "faq"),
-                ("API rate limits", "Standard tier: 60 req/min. Enterprise: negotiated limits.", "technical"),
-                ("Webhook retries", "Failed webhooks retry with exponential backoff up to 24 hours.", "technical"),
-                ("User roles", "Admin can invite users; Billing role can manage invoices only.", "faq"),
-                ("Subscription renewal", "Renewals bill automatically unless canceled before renewal date.", "policy"),
-                ("Credit notes", "Credit notes offset future invoices in the same billing profile.", "faq"),
-                ("Shipping SLA", "Domestic 3–5 days; international 7–14 days unless expedited.", "faq"),
-                ("Returns window", "Returns accepted within 30 days for unused items in original packaging.", "policy"),
-                ("Data export", "Export CSV from Reports > Export with date filters.", "faq"),
-                ("Inventory sync", "Inventory updates every 15 minutes from warehouse connectors.", "technical"),
-                ("Purchase orders", "PO matching requires SKU and quantity alignment within tolerances.", "faq"),
-                ("Vendor onboarding", "Submit W-9 and banking details in Vendor Portal.", "policy"),
-                ("Audit trail", "Admin actions are logged under Settings > Audit Log.", "technical"),
-                ("Integrations", "Connect Slack under Integrations > Notifications.", "faq"),
-                ("Security", "Enable SSO under Enterprise settings.", "technical"),
-                ("Billing disputes", "Open a billing ticket with invoice number attached.", "faq"),
-                ("Late fees", "Overdue invoices may incur late fees per contract terms.", "policy"),
-                ("Export compliance", "Certain SKUs require export documentation before shipment.", "policy"),
-            ]
-            for title, body, cat in articles[:25]:
+            for i in range(1, N_KB + 1):
                 cur.execute(
-                    "INSERT INTO kb_articles (title, body, category) VALUES (%s, %s, %s)",
-                    (title, body, cat),
+                    """
+                    INSERT INTO kb_articles (title, body, category)
+                    VALUES (%s, %s, %s)
+                    """,
+                    (
+                        f"ERP help topic {i}",
+                        f"This article explains ERP feature area {i}. "
+                        f"Use the Orders and Billing modules for self-service.",
+                        "faq" if i % 2 else "policy",
+                    ),
+                )
+
+            cur.execute(
+                """
+                INSERT INTO app_users (username, first_name, role, customer_id)
+                VALUES ('admin', 'Admin', 'admin', NULL)
+                """
+            )
+            cur.execute(
+                """
+                INSERT INTO app_users (username, first_name, role, customer_id)
+                VALUES ('agent', 'Morgan', 'agent', NULL)
+                """
+            )
+            for idx in range(1, 9):
+                cid, fn = customers[idx - 1]
+                cur.execute(
+                    """
+                    INSERT INTO app_users (username, first_name, role, customer_id)
+                    VALUES (%s, %s, 'customer', %s)
+                    """,
+                    (f"cust{idx}", fn, cid),
                 )
 
         conn.commit()
 
-    print("Seed complete: customers=25, products=30, orders=40, order_items≈80+, invoices=40, tickets=30, kb_articles=25")
+    total = N_CUSTOMERS + N_PRODUCTS + N_ORDERS + (N_ORDERS * 2) + N_ORDERS + N_TICKETS + N_KB + 10
+    print(
+        f"Seed complete (~{total} rows): customers={N_CUSTOMERS}, products={N_PRODUCTS}, "
+        f"orders={N_ORDERS}, order_items~{N_ORDERS * 2}, invoices={N_ORDERS}, "
+        f"tickets={N_TICKETS}, kb={N_KB}, users=10"
+    )
+    print("Log in: admin/Admin, agent/Morgan, cust1..cust8/<first name>")
 
 
 if __name__ == "__main__":

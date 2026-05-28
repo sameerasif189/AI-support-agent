@@ -3,222 +3,1466 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ERP AI Support Demo</title>
+    <title>Nexus Support — AI ERP Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
-        --bg: #0f172a;
-        --panel: #111827;
-        --panel2: #1f2937;
-        --text: #e5e7eb;
+        --bg-deep: #06080f;
+        --bg-mid: #0c1222;
+        --surface: rgba(15, 23, 42, 0.72);
+        --surface-hover: rgba(30, 41, 59, 0.85);
+        --border: rgba(148, 163, 184, 0.12);
+        --border-focus: rgba(99, 102, 241, 0.55);
+        --text: #f1f5f9;
         --muted: #94a3b8;
-        --primary: #3b82f6;
-        --bot: #1d4ed8;
-        --user: #334155;
+        --accent: #6366f1;
+        --accent-2: #22d3ee;
+        --accent-glow: rgba(99, 102, 241, 0.35);
+        --user-bubble: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+        --bot-bubble: linear-gradient(135deg, #312e81 0%, #1e3a8a 100%);
+        --success: #34d399;
+        --danger: #f87171;
+        --radius: 16px;
+        --radius-sm: 10px;
+        --shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.55);
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
       }
-      * { box-sizing: border-box; }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html { scroll-behavior: smooth; }
+
       body {
-        margin: 0;
-        font-family: Inter, Segoe UI, Arial, sans-serif;
-        background: linear-gradient(160deg, var(--bg), #020617);
+        font-family: "DM Sans", system-ui, sans-serif;
         color: var(--text);
         min-height: 100vh;
+        background: var(--bg-deep);
+        overflow-x: hidden;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+
+      .bg-scene {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+
+      .bg-scene::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(ellipse 80% 50% at 20% -10%, rgba(99, 102, 241, 0.22), transparent 50%),
+          radial-gradient(ellipse 60% 40% at 90% 20%, rgba(34, 211, 238, 0.12), transparent 45%),
+          radial-gradient(ellipse 50% 60% at 50% 100%, rgba(139, 92, 246, 0.1), transparent 50%),
+          linear-gradient(180deg, var(--bg-mid) 0%, var(--bg-deep) 100%);
+      }
+
+      .orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(80px);
+        opacity: 0.5;
+        animation: float 18s var(--ease) infinite;
+      }
+
+      .orb-1 {
+        width: 420px;
+        height: 420px;
+        background: #4f46e5;
+        top: -120px;
+        left: -80px;
+        animation-delay: 0s;
+      }
+
+      .orb-2 {
+        width: 320px;
+        height: 320px;
+        background: #0891b2;
+        top: 40%;
+        right: -100px;
+        animation-delay: -6s;
+      }
+
+      .orb-3 {
+        width: 280px;
+        height: 280px;
+        background: #7c3aed;
+        bottom: -80px;
+        left: 30%;
+        animation-delay: -12s;
+      }
+
+      @keyframes float {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        33% { transform: translate(24px, -20px) scale(1.05); }
+        66% { transform: translate(-16px, 12px) scale(0.95); }
+      }
+
+      .grid-noise {
+        position: absolute;
+        inset: 0;
+        opacity: 0.04;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      }
+
+      .shell {
+        position: relative;
+        z-index: 1;
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 24px 20px 40px;
+        min-height: 100vh;
+      }
+
+      .brand-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 28px;
+        animation: fadeDown 0.7s var(--ease) both;
+      }
+
+      .logo-mark {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
         display: grid;
         place-items: center;
-        padding: 16px;
+        font-weight: 700;
+        font-size: 18px;
+        box-shadow: 0 8px 24px var(--accent-glow);
       }
-      .app {
-        width: min(900px, 100%);
-        height: min(90vh, 760px);
-        background: rgba(17, 24, 39, 0.9);
-        border: 1px solid #233045;
-        border-radius: 16px;
+
+      .brand-text h2 {
+        font-family: "Instrument Serif", Georgia, serif;
+        font-size: 1.5rem;
+        font-weight: 400;
+        letter-spacing: -0.02em;
+      }
+
+      .brand-text span {
+        font-size: 12px;
+        color: var(--muted);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .glass {
+        background: var(--surface);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+      }
+
+      @keyframes fadeDown {
+        from { opacity: 0; transform: translateY(-12px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(16px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes scaleIn {
+        from { opacity: 0; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1); }
+      }
+
+      @keyframes msgIn {
+        from { opacity: 0; transform: translateY(10px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 0.4; }
+        50% { opacity: 1; }
+      }
+
+      @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+
+      /* Login */
+      #loginCard {
+        max-width: 440px;
+        margin: 0 auto;
+        padding: 36px 32px;
+        animation: scaleIn 0.6s var(--ease) 0.1s both;
+      }
+
+      #loginCard h1 {
+        font-family: "Instrument Serif", Georgia, serif;
+        font-size: 2rem;
+        font-weight: 400;
+        margin-bottom: 8px;
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+        margin-bottom: 28px;
+      }
+
+      .hint strong { color: var(--accent-2); font-weight: 500; }
+
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 8px;
+      }
+
+      input, select, textarea {
+        width: 100%;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.8);
+        color: var(--text);
+        padding: 12px 14px;
+        font: inherit;
+        font-size: 15px;
+        transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      }
+
+      input:focus, select:focus, textarea:focus {
+        outline: none;
+        border-color: var(--border-focus);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        background: rgba(15, 23, 42, 0.95);
+      }
+
+      textarea { min-height: 100px; resize: vertical; }
+
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+      @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        padding: 14px 20px;
+        border: none;
+        border-radius: var(--radius-sm);
+        font: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s var(--ease), box-shadow 0.2s, opacity 0.2s;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%);
+        color: white;
+        box-shadow: 0 8px 24px var(--accent-glow);
+        margin-top: 8px;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 32px var(--accent-glow);
+      }
+
+      .btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+      .btn-ghost {
+        width: auto;
+        padding: 10px 16px;
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        margin-top: 0;
+      }
+
+      .btn-ghost:hover {
+        background: var(--surface-hover);
+        color: var(--text);
+        border-color: rgba(148, 163, 184, 0.25);
+      }
+
+      .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+      #loginErr {
+        color: var(--danger);
+        font-size: 13px;
+        margin-top: 14px;
+        min-height: 1.2em;
+      }
+
+      .hidden { display: none !important; }
+
+      /* Main layout */
+      #mainArea {
+        animation: fadeUp 0.5s var(--ease) both;
+      }
+
+      .dashboard {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      @media (min-width: 960px) {
+        .dashboard.has-knowledge {
+          grid-template-columns: 1fr 380px;
+        }
+      }
+
+      .chat-card {
         display: grid;
         grid-template-rows: auto 1fr auto;
+        min-height: min(78vh, 720px);
         overflow: hidden;
+        padding: 0;
       }
+
       .header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 14px 16px;
-        background: rgba(15, 23, 42, 0.9);
-        border-bottom: 1px solid #233045;
+        gap: 16px;
+        padding: 18px 22px;
+        border-bottom: 1px solid var(--border);
+        flex-wrap: wrap;
       }
-      .title { font-weight: 700; }
-      .badge {
-        background: #0b3a8f;
-        color: #dbeafe;
-        font-size: 12px;
-        padding: 6px 10px;
+
+      .user-block {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .avatar {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #475569, #1e293b);
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 16px;
+        border: 1px solid var(--border);
+      }
+
+      .user-block h3 {
+        font-size: 1rem;
+        font-weight: 600;
+      }
+
+      .user-block .meta {
+        font-size: 13px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+
+      .role-pill {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 3px 8px;
+        border-radius: 6px;
+        margin-left: 8px;
+        vertical-align: middle;
+      }
+
+      .role-pill.admin { background: rgba(251, 191, 36, 0.2); color: #fcd34d; }
+      .role-pill.agent { background: rgba(52, 211, 153, 0.15); color: var(--success); }
+      .role-pill.customer { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .status-badge {
+        font-size: 11px;
+        font-weight: 500;
+        padding: 8px 12px;
         border-radius: 999px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid var(--border);
+        color: var(--muted);
+        max-width: 280px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
+
+      .status-badge.live { border-color: rgba(52, 211, 153, 0.35); color: var(--success); }
+
       .messages {
-        padding: 16px;
+        padding: 20px 22px;
         overflow-y: auto;
         display: flex;
         flex-direction: column;
+        gap: 16px;
+        scroll-behavior: smooth;
+      }
+
+      .messages::-webkit-scrollbar { width: 6px; }
+      .messages::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.25);
+        border-radius: 3px;
+      }
+
+      .msg-row {
+        display: flex;
         gap: 10px;
+        max-width: 88%;
+        animation: msgIn 0.4s var(--ease) both;
       }
-      .msg {
-        max-width: 78%;
-        border-radius: 12px;
-        padding: 10px 12px;
-        line-height: 1.4;
-        white-space: pre-wrap;
-      }
-      .msg.user {
+
+      .msg-row.user {
         align-self: flex-end;
-        background: var(--user);
+        flex-direction: row-reverse;
       }
-      .msg.bot {
-        align-self: flex-start;
-        background: var(--bot);
-      }
-      .meta {
-        color: var(--muted);
-        font-size: 12px;
-        margin-top: 6px;
-      }
-      .composer {
-        border-top: 1px solid #233045;
-        padding: 12px;
-        background: rgba(15, 23, 42, 0.9);
-        display: grid;
-        grid-template-columns: 1fr auto auto;
-        gap: 10px;
-      }
-      input, select, button {
+
+      .msg-row.bot { align-self: flex-start; }
+
+      .msg-avatar {
+        width: 32px;
+        height: 32px;
         border-radius: 10px;
-        border: 1px solid #334155;
-        background: var(--panel2);
-        color: var(--text);
-        padding: 10px 12px;
+        flex-shrink: 0;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        margin-top: 4px;
       }
-      button {
-        background: var(--primary);
-        border: none;
-        font-weight: 600;
+
+      .msg-row.user .msg-avatar {
+        background: linear-gradient(135deg, #64748b, #475569);
+      }
+
+      .msg-row.bot .msg-avatar {
+        background: linear-gradient(135deg, var(--accent), #4f46e5);
+      }
+
+      .msg {
+        padding: 12px 16px;
+        border-radius: 16px;
+        line-height: 1.55;
+        font-size: 15px;
+        white-space: pre-wrap;
+        border: 1px solid transparent;
+      }
+
+      .msg-row.user .msg {
+        background: var(--user-bubble);
+        border-color: rgba(148, 163, 184, 0.1);
+        border-bottom-right-radius: 4px;
+      }
+
+      .msg-row.bot .msg {
+        background: var(--bot-bubble);
+        border-color: rgba(99, 102, 241, 0.2);
+        border-bottom-left-radius: 4px;
+      }
+
+      .msg .sub {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 11px;
+        color: rgba(203, 213, 225, 0.75);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .tag {
+        display: inline-flex;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.2);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .typing {
+        display: flex;
+        gap: 5px;
+        padding: 14px 18px;
+        align-self: flex-start;
+        animation: msgIn 0.3s var(--ease) both;
+      }
+
+      .typing span {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent-2);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+
+      .typing span:nth-child(2) { animation-delay: 0.15s; }
+      .typing span:nth-child(3) { animation-delay: 0.3s; }
+
+      .gpu-warn {
+        margin: 0 18px 8px;
+        padding: 10px 14px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: #fcd34d;
+        background: rgba(251, 191, 36, 0.08);
+        border: 1px solid rgba(251, 191, 36, 0.25);
+        border-radius: 10px;
+      }
+      .gpu-warn code { font-size: 11px; color: #fde68a; }
+
+      .composer {
+        border-top: 1px solid var(--border);
+        padding: 16px 18px 18px;
+        background: rgba(6, 8, 15, 0.4);
+      }
+
+      .composer-inner {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+      }
+
+      .composer-input-wrap {
+        flex: 1;
+        min-width: 200px;
+        position: relative;
+      }
+
+      .composer-input-wrap input {
+        padding-right: 48px;
+      }
+
+      .composer-tools {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .composer-tools select {
+        width: auto;
+        min-width: 100px;
+        padding: 10px 12px;
+        font-size: 13px;
         cursor: pointer;
       }
-      button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+      .btn-send {
+        width: auto;
+        min-width: 100px;
+        padding: 12px 22px;
+        margin-top: 0;
+        border-radius: var(--radius-sm);
+      }
+
+      .btn-send .icon { font-size: 18px; line-height: 1; }
+
+      /* Knowledge panel */
+      #knowledgeCard {
+        padding: 24px;
+        animation: fadeUp 0.5s var(--ease) 0.15s both;
+        max-height: min(78vh, 720px);
+        overflow-y: auto;
+      }
+
+      #knowledgeCard h1 {
+        font-family: "Instrument Serif", Georgia, serif;
+        font-size: 1.5rem;
+        font-weight: 400;
+        margin-bottom: 6px;
+      }
+
+      #knowledgeCard > .meta {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 20px;
+        line-height: 1.5;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 20px;
+        padding: 4px;
+        background: rgba(15, 23, 42, 0.6);
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+      }
+
+      .tabs button {
+        flex: 1;
+        width: auto;
+        margin: 0;
+        padding: 10px 12px;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.25s var(--ease);
+      }
+
+      .tabs button:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+
+      .tabs button.active {
+        background: linear-gradient(135deg, var(--accent), #4f46e5);
+        color: white;
+        box-shadow: 0 4px 12px var(--accent-glow);
+      }
+
+      .tab-panel { animation: fadeUp 0.35s var(--ease) both; }
+      .tab-panel label { margin-top: 14px; }
+      .tab-panel label:first-child { margin-top: 0; }
+
+      #ingestMsg {
+        font-size: 13px;
+        margin-top: 14px;
+        min-height: 1.2em;
+        color: var(--accent-2);
+      }
+
+      #ingestMsg.error { color: var(--danger); }
+
+      .docs-header {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin: 24px 0 12px;
+      }
+
+      ul.docs { list-style: none; }
+
+      ul.docs li {
+        padding: 12px 14px;
+        margin-bottom: 8px;
+        border-radius: var(--radius-sm);
+        background: rgba(15, 23, 42, 0.5);
+        border: 1px solid var(--border);
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.45;
+        transition: border-color 0.2s, transform 0.2s var(--ease);
+        animation: fadeUp 0.4s var(--ease) both;
+      }
+
+      ul.docs li:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        transform: translateX(4px);
+      }
+
+      ul.docs li strong {
+        display: block;
+        color: var(--text);
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+
+      .empty-docs {
+        text-align: center;
+        padding: 24px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .feed-index-summary {
+        margin-top: 14px;
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        line-height: 1.5;
+        border: 1px solid var(--border);
+        background: rgba(15, 23, 42, 0.55);
+        color: var(--muted);
+      }
+
+      .feed-index-summary strong { color: var(--text); }
+
+      ul.feed-docs li .feed-meta {
+        display: block;
+        font-size: 11px;
+        margin-top: 4px;
+        word-break: break-all;
+      }
+
+      ul.feed-docs li .feed-kb-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+      }
+
+      .feed-status {
+        display: inline-block;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .feed-status.indexed {
+        background: rgba(52, 211, 153, 0.15);
+        color: #6ee7b7;
+        border: 1px solid rgba(52, 211, 153, 0.35);
+      }
+
+      .feed-status.failed,
+      .feed-status.empty_document,
+      .feed-status.no_document,
+      .feed-status.never_synced {
+        background: rgba(248, 113, 113, 0.12);
+        color: #fca5a5;
+        border: 1px solid rgba(248, 113, 113, 0.3);
+      }
+
+      .feed-status.never_synced {
+        background: rgba(251, 191, 36, 0.12);
+        color: #fcd34d;
+        border-color: rgba(251, 191, 36, 0.3);
+      }
+
+      .feed-sync-btn {
+        margin-left: auto;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: rgba(99, 102, 241, 0.15);
+        color: var(--accent-2);
+        cursor: pointer;
+      }
+
+      .feed-sync-btn:hover { background: rgba(99, 102, 241, 0.28); }
+
+      .feature-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 24px;
+        justify-content: center;
+      }
+
+      .chip {
+        font-size: 11px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        background: rgba(15, 23, 42, 0.5);
+      }
     </style>
   </head>
   <body>
-    <div class="app">
-      <div class="header">
-        <div>
-          <div class="title">ERP AI Support Agent Demo</div>
-          <div class="meta">Natural replies + Web/WhatsApp/Slack-compatible backend</div>
+    <div class="bg-scene" aria-hidden="true">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+      <div class="grid-noise"></div>
+    </div>
+
+    <div class="shell">
+      <header class="brand-bar">
+        <div class="logo-mark" aria-hidden="true">N</div>
+        <div class="brand-text">
+          <span>Enterprise support</span>
+          <h2>Nexus Support</h2>
         </div>
-        <div class="badge" id="budgetBadge">Budget: loading...</div>
-      </div>
-      <div class="messages" id="messages"></div>
-      <form class="composer" id="chatForm">
-        <input id="messageInput" type="text" placeholder="Ask about invoice, order status, account, tickets..." />
-        <select id="channelSelect">
-          <option value="web">web</option>
-          <option value="whatsapp">whatsapp</option>
-          <option value="slack">slack</option>
-        </select>
-        <button id="sendBtn" type="submit">Send</button>
-      </form>
+      </header>
+
+      <section id="loginCard" class="glass">
+        <h1>Welcome back</h1>
+        <p class="hint">
+          Sign in to your workspace. Password is your <strong>first name</strong>
+          (e.g. admin → <strong>Admin</strong>, cust1 → <strong>Alex</strong>).
+        </p>
+        <div class="row">
+          <div>
+            <label for="loginUser">Username</label>
+            <input id="loginUser" placeholder="admin, agent, cust1" value="cust1" autocomplete="username" />
+          </div>
+          <div>
+            <label for="loginPass">Password</label>
+            <input id="loginPass" type="password" placeholder="first name" value="Alex" autocomplete="current-password" />
+          </div>
+        </div>
+        <button id="loginBtn" type="button" class="btn btn-primary">Continue to workspace</button>
+        <p id="loginErr" role="alert"></p>
+        <div class="feature-chips">
+          <span class="chip">RAG knowledge</span>
+          <span class="chip">ERP context</span>
+          <span class="chip">Native GPU + API</span>
+        </div>
+      </section>
+
+      <section id="mainArea" class="hidden">
+        <div class="dashboard" id="dashboard">
+          <article class="glass chat-card">
+            <header class="header">
+              <div class="user-block">
+                <div class="avatar" id="userAvatar" aria-hidden="true">A</div>
+                <div>
+                  <h3 id="userLabel">User</h3>
+                  <p class="meta">RAG · Native GPU (llama.cpp) · Groq API</p>
+                </div>
+              </div>
+              <div class="header-actions">
+                <span class="status-badge" id="llmBadge" title="Model status">Connecting…</span>
+                <button class="btn btn-ghost" id="logoutBtn" type="button">Sign out</button>
+              </div>
+            </header>
+            <div class="messages" id="messages" role="log" aria-live="polite"></div>
+            <p id="gpuWarn" class="gpu-warn" hidden>
+              Native GPU model not loaded. Run <code>scripts\download_native_model.ps1</code>, then restart the server.
+            </p>
+            <form class="composer" id="chatForm">
+              <div class="composer-inner">
+                <div class="composer-input-wrap">
+                  <input id="messageInput" type="text" placeholder="Ask about orders, invoices, or your docs…" autocomplete="off" />
+                </div>
+                <div class="composer-tools">
+                  <select id="llmMode" title="LLM routing">
+                    <option value="auto">Auto</option>
+                    <option value="local">Local GPU</option>
+                    <option value="api">Cloud API</option>
+                  </select>
+                  <select id="channelSelect" class="hidden" aria-hidden="true">
+                    <option value="web">web</option>
+                  </select>
+                  <button id="sendBtn" type="submit" class="btn btn-primary btn-send">
+                    <span>Send</span>
+                    <span class="icon" aria-hidden="true">→</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </article>
+
+          <aside id="knowledgeCard" class="glass hidden">
+            <h1>Knowledge</h1>
+            <p class="meta">Uploads and one-shot URLs index immediately. <strong>Live feeds</strong> poll an API into the KB (<code>feed</code> docs). <strong>Learned</strong> rows come from chat Q&amp;A — not live feeds.</p>
+            <nav class="tabs" role="tablist">
+              <button type="button" class="active" data-tab="text" role="tab">Text</button>
+              <button type="button" data-tab="file" role="tab">File</button>
+              <button type="button" data-tab="api" role="tab">Once</button>
+              <button type="button" data-tab="feeds" role="tab">Live feed</button>
+            </nav>
+            <div id="tabText" class="tab-panel" role="tabpanel">
+              <label for="textTitle">Title</label>
+              <input id="textTitle" placeholder="Refund policy update" />
+              <label for="textBody">Content</label>
+              <textarea id="textBody" placeholder="Paste documentation…"></textarea>
+              <button type="button" id="addTextBtn" class="btn btn-primary">Add to knowledge</button>
+            </div>
+            <div id="tabFile" class="tab-panel hidden" role="tabpanel">
+              <label for="fileTitle">Title (optional)</label>
+              <input id="fileTitle" />
+              <label for="fileInput">File</label>
+              <input id="fileInput" type="file" accept=".txt,.md,.csv,.json,.log" />
+              <button type="button" id="uploadFileBtn" class="btn btn-primary">Upload file</button>
+            </div>
+            <div id="tabApi" class="tab-panel hidden" role="tabpanel">
+              <label for="apiUrl">URL</label>
+              <input id="apiUrl" placeholder="https://api.example.com/docs" />
+              <label for="apiTitle">Title (optional)</label>
+              <input id="apiTitle" />
+              <button type="button" id="addApiBtn" class="btn btn-primary">Fetch &amp; index once</button>
+            </div>
+            <div id="tabFeeds" class="tab-panel hidden" role="tabpanel">
+              <p class="meta" style="margin-top:0">Register a reachable URL, then sync. <code>api.example.com</code> fails DNS — use <strong>Try demo feed</strong> to test.</p>
+              <label for="feedUrl">API URL (polled automatically)</label>
+              <input id="feedUrl" placeholder="http://localhost:8000/" />
+              <label for="feedTitle">Title</label>
+              <input id="feedTitle" placeholder="ERP demo help feed" />
+              <label for="feedInterval">Refresh every (minutes)</label>
+              <input id="feedInterval" type="number" min="5" value="60" />
+              <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+                <button type="button" id="registerFeedBtn" class="btn btn-primary">Register live feed</button>
+                <button type="button" id="demoFeedBtn" class="btn btn-ghost">Try demo feed</button>
+                <button type="button" id="syncAllFeedsBtn" class="btn btn-ghost">Sync all feeds now</button>
+              </div>
+              <div id="feedIndexSummary" class="feed-index-summary" hidden></div>
+              <ul class="docs feed-docs" id="feedList" style="margin-top:12px"></ul>
+            </div>
+            <p id="ingestMsg"></p>
+            <p class="docs-header">Indexed documents</p>
+            <ul class="docs" id="docList"></ul>
+          </aside>
+        </div>
+      </section>
     </div>
 
     <script>
+      const TOKEN_KEY = "erp_ai_token";
+      function chatSessionKey() {
+        const u = currentUser?.id ?? "anon";
+        return `erp_ai_chat_session_${u}`;
+      }
+      const loginCard = document.getElementById("loginCard");
+      const mainArea = document.getElementById("mainArea");
+      const knowledgeCard = document.getElementById("knowledgeCard");
+      const dashboard = document.getElementById("dashboard");
       const messagesEl = document.getElementById("messages");
-      const formEl = document.getElementById("chatForm");
-      const inputEl = document.getElementById("messageInput");
-      const channelEl = document.getElementById("channelSelect");
-      const sendBtn = document.getElementById("sendBtn");
-      const budgetBadge = document.getElementById("budgetBadge");
-      const userId = "admin";
+      const userLabel = document.getElementById("userLabel");
+      const userAvatar = document.getElementById("userAvatar");
+      const llmBadge = document.getElementById("llmBadge");
+      let typingEl = null;
+      let currentUser = null;
 
-      function addMessage(role, text, meta = "") {
-        const wrap = document.createElement("div");
-        wrap.className = `msg ${role}`;
-        wrap.textContent = text;
-        if (meta) {
-          const m = document.createElement("div");
-          m.className = "meta";
-          m.textContent = meta;
-          wrap.appendChild(m);
+      function token() {
+        return localStorage.getItem(TOKEN_KEY);
+      }
+
+      function authHeaders(json = true) {
+        const h = { Authorization: "Bearer " + token() };
+        if (json) h["Content-Type"] = "application/json";
+        return h;
+      }
+
+      function apiErrorMessage(d) {
+        if (!d) return "Request failed";
+        if (typeof d.detail === "string") return d.detail;
+        if (Array.isArray(d.detail)) {
+          return d.detail.map((e) => e.msg || e.message || JSON.stringify(e)).join("; ");
         }
-        messagesEl.appendChild(wrap);
+        return d.message || "Request failed";
+      }
+
+      function isPlaceholderFeedUrl(url) {
+        const u = (url || "").toLowerCase();
+        return u.includes("api.example.com") || u.includes("example.com/v1/help");
+      }
+
+      async function registerLiveFeed() {
+        const url = document.getElementById("feedUrl").value.trim();
+        const title = document.getElementById("feedTitle").value.trim();
+        if (!url || !title) {
+          setIngestMsg("URL and title are required.", true);
+          return;
+        }
+        if (isPlaceholderFeedUrl(url)) {
+          setIngestMsg("Replace api.example.com with a real URL or click Try demo feed.", true);
+          return;
+        }
+        setIngestMsg("Registering feed…");
+        const r = await fetch("/knowledge/feeds", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({
+            url,
+            title,
+            poll_interval_minutes: parseInt(document.getElementById("feedInterval").value, 10) || 60,
+            sync_now: true,
+          }),
+        });
+        const d = await r.json();
+        if (r.ok) {
+          const sync = d.sync || {};
+          const kb = sync.kb_indexed
+            ? ` — ${sync.message || "indexed in knowledge base"}`
+            : sync.error
+              ? ` — not indexed: ${sync.error}`
+              : "";
+          setIngestMsg(`Live feed registered: ${d.feed.title}${kb}`);
+          loadFeeds();
+          loadDocs();
+        } else setIngestMsg(apiErrorMessage(d), true);
+      }
+
+      function showTyping() {
+        hideTyping();
+        typingEl = document.createElement("div");
+        typingEl.className = "typing";
+        typingEl.setAttribute("aria-label", "Assistant is typing");
+        typingEl.innerHTML = "<span></span><span></span><span></span>";
+        messagesEl.appendChild(typingEl);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
-      async function refreshBudget() {
-        try {
-          const r = await fetch("/metrics/budget");
-          const d = await r.json();
-          budgetBadge.textContent = `Budget: $${d.total_usd.toFixed(4)} / $${d.budget_usd}`;
-        } catch {
-          budgetBadge.textContent = "Budget: unavailable";
+      function hideTyping() {
+        if (typingEl) {
+          typingEl.remove();
+          typingEl = null;
         }
       }
 
-      formEl.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const message = inputEl.value.trim();
-        if (!message) return;
-        const channel = channelEl.value;
-        addMessage("user", message, `channel: ${channel}`);
-        inputEl.value = "";
-        sendBtn.disabled = true;
+      function formatMeta(sub) {
+        if (!sub) return "";
+        const parts = sub.split("·").map((s) => s.trim()).filter(Boolean);
+        return parts.map((p) => `<span class="tag">${p}</span>`).join("");
+      }
 
+      function addMessage(role, text, sub = "") {
+        const row = document.createElement("div");
+        row.className = `msg-row ${role}`;
+        const av = document.createElement("div");
+        av.className = "msg-avatar";
+        av.textContent = role === "user" ? (userAvatar.textContent || "U") : "✦";
+        av.setAttribute("aria-hidden", "true");
+        const bubble = document.createElement("div");
+        bubble.className = "msg";
+        bubble.textContent = text;
+        if (sub) {
+          const m = document.createElement("div");
+          m.className = "sub";
+          m.innerHTML = formatMeta(sub);
+          bubble.appendChild(m);
+        }
+        row.appendChild(av);
+        row.appendChild(bubble);
+        messagesEl.appendChild(row);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      async function refreshHealth() {
+        try {
+          const r = await fetch("/health");
+          const d = await r.json();
+          const o = d.local_ollama || {};
+          const backend = d.local_backend || o.backend || "none";
+          let gpu = "local off";
+          if (backend === "native" || o.backend === "native") {
+            if (o.model_ready && o.gpu_active) gpu = `Native GPU · ${o.model || "ready"}`;
+            else if (o.model_ready) gpu = `Native CPU · ${o.model || "ready"}`;
+            else if (d.native_configured) gpu = "Native · loading on first chat…";
+            else gpu = "Native · run download_native_model.ps1";
+          } else if (!d.llm_local) {
+            gpu = "native not configured";
+          }
+          llmBadge.textContent = `Groq ${d.llm_api ? "on" : "off"} · ${gpu}`;
+          llmBadge.title = o.hint || o.error || "";
+          const localLive = o.model_ready || (d.native_configured && d.llm_local);
+          llmBadge.classList.toggle("live", !!localLive);
+          const warn = document.getElementById("gpuWarn");
+          if (warn) {
+            const show =
+              (backend === "native" || !d.llm_local) &&
+              !o.model_ready &&
+              document.getElementById("llmMode")?.value === "local";
+            warn.hidden = !show;
+          }
+        } catch {
+          llmBadge.textContent = "Status unavailable";
+          llmBadge.classList.remove("live");
+        }
+      }
+
+      async function loadDocs() {
+        const list = document.getElementById("docList");
+        list.innerHTML = "";
+        try {
+          const r = await fetch("/knowledge", { headers: authHeaders() });
+          if (!r.ok) return;
+          const docs = await r.json();
+          if (!docs.length) {
+            list.innerHTML = '<li class="empty-docs">No documents yet — add your first source above.</li>';
+            return;
+          }
+          docs.forEach((d, i) => {
+            const li = document.createElement("li");
+            li.style.animationDelay = `${i * 0.05}s`;
+            const typeLabel =
+              d.source_type === "feed"
+                ? "live feed"
+                : d.source_type === "learned"
+                  ? "learned from chat"
+                  : d.source_type;
+            li.innerHTML = `<strong>${escapeHtml(d.title)}</strong><span>${escapeHtml(typeLabel)} · #${d.id} · ${escapeHtml((d.preview || "").slice(0, 120))}</span>`;
+            list.appendChild(li);
+          });
+        } catch {
+          list.innerHTML = '<li class="empty-docs">Could not load documents.</li>';
+        }
+      }
+
+      function escapeHtml(s) {
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      function showApp(user, instant = false) {
+        currentUser = user;
+        const enter = () => {
+          loginCard.classList.add("hidden");
+          document.querySelector(".brand-bar").classList.add("hidden");
+          mainArea.classList.remove("hidden");
+        };
+        if (instant) {
+          enter();
+        } else {
+          loginCard.style.opacity = "0";
+          loginCard.style.transform = "translateY(-8px)";
+          loginCard.style.transition = "opacity 0.35s ease, transform 0.35s ease";
+          setTimeout(enter, 280);
+        }
+
+        const initial = (user.first_name || user.username || "U").charAt(0).toUpperCase();
+        userAvatar.textContent = initial;
+        userLabel.innerHTML = `${escapeHtml(user.first_name)}<span class="role-pill ${user.role}">${user.role}</span>`;
+
+        if (user.role === "admin" || user.role === "agent") {
+          knowledgeCard.classList.remove("hidden");
+          dashboard.classList.add("has-knowledge");
+          loadDocs();
+          loadFeeds();
+        }
+        refreshHealth();
+        setInterval(refreshHealth, 30000);
+        document.getElementById("llmMode").addEventListener("change", refreshHealth);
+        addMessage("bot", "Hello! I can help with ERP data and anything in your knowledge base. What would you like to know?");
+      }
+
+      async function bootstrap() {
+        if (!token()) return;
+        try {
+          const r = await fetch("/auth/me", { headers: authHeaders() });
+          if (!r.ok) {
+            localStorage.removeItem(TOKEN_KEY);
+            return;
+          }
+          showApp(await r.json(), true);
+        } catch {
+          localStorage.removeItem(TOKEN_KEY);
+        }
+      }
+
+      document.getElementById("loginBtn").addEventListener("click", async () => {
+        const err = document.getElementById("loginErr");
+        const btn = document.getElementById("loginBtn");
+        err.textContent = "";
+        btn.disabled = true;
+        btn.textContent = "Signing in…";
         const ac = new AbortController();
         const t = window.setTimeout(() => ac.abort(), 20000);
-
         try {
-          const res = await fetch("/chat", {
+          const r = await fetch("/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: userId, channel, message }),
-            signal: ac.signal
+            body: JSON.stringify({
+              username: document.getElementById("loginUser").value.trim(),
+              password: document.getElementById("loginPass").value,
+            }),
+            signal: ac.signal,
           });
-
           window.clearTimeout(t);
-
-          const text = await res.text();
-          let data = {};
-          try {
-            data = text ? JSON.parse(text) : {};
-          } catch {
-            addMessage("bot", `Server error (${res.status}).`, text.slice(0, 280));
+          const data = await r.json();
+          if (!r.ok) {
+            err.textContent = data.detail || "Login failed";
             return;
           }
-
-          if (!res.ok) {
-            const detail =
-              typeof data.detail === "string"
-                ? data.detail
-                : Array.isArray(data.detail)
-                  ? JSON.stringify(data.detail)
-                  : res.statusText;
-            addMessage("bot", "Request failed.", `HTTP ${res.status}: ${detail || "unknown error"}`);
-            return;
-          }
-
-          addMessage(
-            "bot",
-            data.answer || "No response",
-            `action: ${data.action} | confidence: ${data.confidence} | est cost: $${data.est_cost_usd}`
-          );
-        } catch (err) {
-          if (err && err.name === "AbortError") {
-            addMessage("bot", "That took too long and timed out. Try again, or POST /chat from /docs to compare.");
+          localStorage.setItem(TOKEN_KEY, data.token);
+          messagesEl.innerHTML = "";
+          Object.keys(localStorage)
+            .filter((k) => k.startsWith("erp_ai_chat_session"))
+            .forEach((k) => localStorage.removeItem(k));
+          showApp(data.user);
+        } catch (e) {
+          if (e && e.name === "AbortError") {
+            err.textContent = "Login timed out — restart the server (Ctrl+C, then run_dev.ps1).";
           } else {
-            addMessage("bot", "Unable to reach the API. Check Deployment logs in Vercel.");
+            err.textContent = "Cannot reach the API. Is the server running?";
           }
         } finally {
           window.clearTimeout(t);
-          sendBtn.disabled = false;
-          refreshBudget();
+          btn.disabled = false;
+          btn.textContent = "Continue to workspace";
         }
       });
 
-      addMessage("bot", "Hi! I can help with invoices, order status, account details, and tickets. What do you need?");
-      refreshBudget();
+      document.getElementById("loginPass").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") document.getElementById("loginBtn").click();
+      });
+
+      document.getElementById("logoutBtn").addEventListener("click", async () => {
+        try {
+          await fetch("/auth/logout", { method: "POST", headers: authHeaders() });
+        } catch {}
+        localStorage.removeItem(TOKEN_KEY);
+        Object.keys(localStorage)
+          .filter((k) => k.startsWith("erp_ai_chat_session"))
+          .forEach((k) => localStorage.removeItem(k));
+        location.reload();
+      });
+
+      document.getElementById("chatForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const message = document.getElementById("messageInput").value.trim();
+        if (!message) return;
+        const sendBtn = document.getElementById("sendBtn");
+        addMessage("user", message);
+        document.getElementById("messageInput").value = "";
+        sendBtn.disabled = true;
+        showTyping();
+        try {
+          const res = await fetch("/chat", {
+            method: "POST",
+            headers: authHeaders(),
+            body: JSON.stringify({
+              channel: document.getElementById("channelSelect").value,
+              message,
+              llm_mode: document.getElementById("llmMode").value,
+              session_id: localStorage.getItem(chatSessionKey()) || null,
+            }),
+          });
+          const data = await res.json();
+          hideTyping();
+          if (!res.ok) {
+            addMessage("bot", data.detail || "Something went wrong.", `error · HTTP ${res.status}`);
+            return;
+          }
+          if (data.session_id) localStorage.setItem(chatSessionKey(), data.session_id);
+          const kbNote = data.kb_learned ? " · added to KB" : "";
+          const memNote = data.memory_updated ? " · remembered you" : "";
+          addMessage(
+            "bot",
+            data.answer,
+            `llm ${data.llm_source} · ${data.sources_used} sources · ${Math.round(data.confidence * 100)}% confidence${kbNote}${memNote}`
+          );
+        } catch {
+          hideTyping();
+          addMessage("bot", "I couldn't reach the server. Please try again.");
+        } finally {
+          sendBtn.disabled = false;
+        }
+      });
+
+      document.querySelectorAll(".tabs button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          ["text", "file", "api", "feeds"].forEach((t) => {
+            const id = t === "feeds" ? "tabFeeds" : "tab" + t.charAt(0).toUpperCase() + t.slice(1);
+            document.getElementById(id).classList.toggle("hidden", t !== btn.dataset.tab);
+          });
+          if (btn.dataset.tab === "feeds") loadFeeds();
+        });
+      });
+
+      function setIngestMsg(text, isError) {
+        const el = document.getElementById("ingestMsg");
+        el.textContent = text;
+        el.classList.toggle("error", !!isError);
+      }
+
+      document.getElementById("addTextBtn").addEventListener("click", async () => {
+        setIngestMsg("Saving…");
+        const r = await fetch("/knowledge/text", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({
+            title: document.getElementById("textTitle").value.trim(),
+            body: document.getElementById("textBody").value.trim(),
+          }),
+        });
+        const d = await r.json();
+        if (r.ok) {
+          setIngestMsg(`Added “${d.document.title}”`);
+          loadDocs();
+        } else setIngestMsg(d.detail || "Failed", true);
+      });
+
+      document.getElementById("uploadFileBtn").addEventListener("click", async () => {
+        const f = document.getElementById("fileInput").files[0];
+        if (!f) {
+          setIngestMsg("Choose a file first", true);
+          return;
+        }
+        const fd = new FormData();
+        fd.append("file", f);
+        const title = document.getElementById("fileTitle").value.trim();
+        if (title) fd.append("title", title);
+        setIngestMsg("Uploading…");
+        const r = await fetch("/knowledge/file", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + token() },
+          body: fd,
+        });
+        const d = await r.json();
+        if (r.ok) {
+          setIngestMsg(`Uploaded “${d.document.title}”`);
+          loadDocs();
+        } else setIngestMsg(d.detail || "Failed", true);
+      });
+
+      function feedStatusClass(status) {
+        if (status === "indexed") return "indexed";
+        if (status === "never_synced") return "never_synced";
+        return "failed";
+      }
+
+      function formatFeedTime(iso) {
+        if (!iso) return "never";
+        try {
+          return new Date(iso).toLocaleString();
+        } catch {
+          return iso;
+        }
+      }
+
+      async function loadFeeds() {
+        const list = document.getElementById("feedList");
+        const summary = document.getElementById("feedIndexSummary");
+        if (!list) return;
+        list.innerHTML = "";
+        try {
+          const r = await fetch("/knowledge/feeds", { headers: authHeaders() });
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            list.innerHTML = `<li class="empty-docs">${escapeHtml(apiErrorMessage(err) || `Cannot load feeds (HTTP ${r.status})`)}</li>`;
+            if (summary) summary.hidden = true;
+            return;
+          }
+          const feeds = await r.json();
+          if (!feeds.length) {
+            if (summary) summary.hidden = true;
+            list.innerHTML = '<li class="empty-docs">No live feeds — register an API URL above.</li>';
+            return;
+          }
+          const indexed = feeds.filter((f) => f.kb_indexed).length;
+          const failed = feeds.filter((f) => f.kb_status === "sync_failed").length;
+          const pending = feeds.length - indexed - failed;
+          if (summary) {
+            summary.hidden = false;
+            summary.innerHTML =
+              `<strong>Knowledge base:</strong> ${indexed} of ${feeds.length} feed(s) indexed` +
+              (failed ? ` · ${failed} failed` : "") +
+              (pending ? ` · ${pending} pending` : "") +
+              ` — indexed docs appear under “Indexed documents” below.`;
+          }
+          feeds.forEach((f) => {
+            const li = document.createElement("li");
+            const stClass = feedStatusClass(f.kb_status);
+            const docLine =
+              f.kb_indexed && f.doc_title
+                ? `<span>KB doc #${f.document_id}: “${escapeHtml(f.doc_title)}”</span>`
+                : f.last_error
+                  ? `<span>Error: ${escapeHtml(f.last_error.slice(0, 120))}</span>`
+                  : `<span>${escapeHtml(f.kb_status_label || "")}</span>`;
+            li.innerHTML = `
+              <strong>${escapeHtml(f.title)}</strong>
+              <span class="feed-meta">${escapeHtml(f.url)} · every ${f.poll_interval_minutes}m · last sync ${formatFeedTime(f.last_synced_at)}</span>
+              <div class="feed-kb-row">
+                <span class="feed-status ${stClass}">${f.kb_indexed ? "In knowledge base" : "Not in KB"}</span>
+                ${docLine}
+                <button type="button" class="feed-sync-btn" data-feed-id="${f.id}">Sync now</button>
+              </div>
+            `;
+            list.appendChild(li);
+          });
+        } catch {
+          if (summary) summary.hidden = true;
+          list.innerHTML = '<li class="empty-docs">Could not load feeds.</li>';
+        }
+      }
+
+      document.getElementById("feedList")?.addEventListener("click", async (e) => {
+        const btn = e.target.closest(".feed-sync-btn");
+        if (!btn) return;
+        const feedId = btn.getAttribute("data-feed-id");
+        if (!feedId) return;
+        btn.disabled = true;
+        btn.textContent = "Syncing…";
+        setIngestMsg(`Syncing feed #${feedId}…`);
+        try {
+          const r = await fetch(`/knowledge/feeds/${feedId}/sync`, {
+            method: "POST",
+            headers: authHeaders(),
+          });
+          const d = await r.json();
+          if (r.ok && d.ok) {
+            setIngestMsg(d.message || `Feed #${feedId} indexed in knowledge base`);
+          } else {
+            setIngestMsg(d.message || d.error || d.detail || "Sync failed", true);
+          }
+          loadFeeds();
+          loadDocs();
+        } catch {
+          setIngestMsg("Sync request failed", true);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Sync now";
+        }
+      });
+
+      document.getElementById("registerFeedBtn").addEventListener("click", () => registerLiveFeed());
+
+      document.getElementById("demoFeedBtn").addEventListener("click", () => {
+        const base = window.location.origin;
+        document.getElementById("feedUrl").value = `${base}/`;
+        document.getElementById("feedTitle").value = "ERP demo help feed";
+        registerLiveFeed();
+      });
+
+      document.getElementById("syncAllFeedsBtn").addEventListener("click", async () => {
+        setIngestMsg("Syncing all feeds…");
+        const r = await fetch("/knowledge/sync-all", { method: "POST", headers: authHeaders() });
+        const d = await r.json();
+        if (r.ok) {
+          const results = d.results || [];
+          const ok = results.filter((x) => x.ok).length;
+          const bad = results.filter((x) => !x.ok).length;
+          setIngestMsg(
+            `Synced ${d.synced} feed(s): ${ok} in knowledge base` + (bad ? `, ${bad} failed` : "")
+          );
+          loadFeeds();
+          loadDocs();
+        } else setIngestMsg(apiErrorMessage(d), true);
+      });
+
+      document.getElementById("addApiBtn").addEventListener("click", async () => {
+        setIngestMsg("Fetching URL…");
+        const r = await fetch("/knowledge/api-feed", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({
+            url: document.getElementById("apiUrl").value.trim(),
+            title: document.getElementById("apiTitle").value.trim() || null,
+          }),
+        });
+        const d = await r.json();
+        if (r.ok) {
+          setIngestMsg(`Indexed “${d.document.title}”`);
+          loadDocs();
+        } else setIngestMsg(d.detail || "Failed", true);
+      });
+
+      bootstrap();
     </script>
   </body>
-  </html>
+</html>
