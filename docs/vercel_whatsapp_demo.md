@@ -137,6 +137,8 @@ powershell -ExecutionPolicy Bypass -File scripts/setup_vercel_whatsapp_demo.ps1
 
 Copy env vars from `vercel.env.example` into the Vercel dashboard.
 
+**If deploy fails with `functions` / `api/index.py`:** use root `index.py` (not `api/index.py`). In Vercel → Project → **Settings** → **Functions**, remove any custom path overrides, then **Redeploy** with **Clear build cache**.
+
 ---
 
 ## Part C — Connect WhatsApp webhook

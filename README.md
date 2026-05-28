@@ -23,7 +23,7 @@ Budget-controlled AI support backend for an existing ERP website with web, Whats
 - `scripts/seed_db.py`: ~270 deterministic synthetic rows
 - `config/guardrails.json`: token and budget limits
 - `config/intents_policy.json`: intent classes and sensitive keywords
-- `api/index.py` + `vercel.json`: Vercel serverless entry
+- `index.py` + `vercel.json`: Vercel serverless entry (root FastAPI ASGI)
 - `docs/`: runbook and UAT checklist
 
 ## Database (Neon)
@@ -88,7 +88,7 @@ Use `user_id` as the numeric **customer id** from the seeded data (e.g. `"1"` â€
 1. Push the repo and import the project in Vercel.
 2. Set environment variables: `DATABASE_URL`, `LLM_API_BASE`, `LLM_API_KEY`, `LLM_MODEL` (same as `.env.example`).
 3. For WhatsApp demo also set `WHATSAPP_*` vars and `LLM_ORDER=api`, `RAG_FEED_SYNC_ENABLED=false`.
-4. Deploy. The ASGI app is exposed via `api/index.py` per `vercel.json`.
+4. Deploy. The ASGI app is exposed via root `index.py` (see `vercel.json` rewrites).
 
 **WhatsApp on Vercel:** step-by-step in [`docs/vercel_whatsapp_demo.md`](docs/vercel_whatsapp_demo.md). Env template: `vercel.env.example`. Local DB prep: `scripts/setup_vercel_whatsapp_demo.ps1`. Smoke: `scripts/smoke_whatsapp.ps1 -BaseUrl https://your-app.vercel.app`.
 
