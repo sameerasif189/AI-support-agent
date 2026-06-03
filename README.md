@@ -1,5 +1,7 @@
 # Lean ERP AI Support Agent
 
+**Infigo website-only API:** see [`infigobot/`](infigobot/) — deploy that folder to Vercel for [infigosolutions.com](https://infigosolutions.com/) chat (no ERP/WhatsApp).
+
 Budget-controlled AI support backend for an existing ERP website with web, WhatsApp, and Slack channels. The lean stack uses **Neon Postgres** (synthetic ERP + KB data), a **free Groq** OpenAI-compatible LLM, and optional **Vercel** deployment.
 
 ## What is implemented
@@ -15,16 +17,12 @@ Budget-controlled AI support backend for an existing ERP website with web, Whats
 
 ## Project structure
 
-- `app/main.py`: FastAPI app, `/chat`, channel webhooks, `/erp/*` inspection routes
-- `app/services.py`: intent router, retriever, ERP client, cache, LLM, budget tracker
-- `app/db.py`: async Neon connection pool
-- `app/repositories.py`: SQL access (parameterized)
-- `scripts/init_schema.sql`: 7 linked ERP tables
-- `scripts/seed_db.py`: ~270 deterministic synthetic rows
-- `config/guardrails.json`: token and budget limits
-- `config/intents_policy.json`: intent classes and sensitive keywords
-- `index.py` + `vercel.json`: Vercel serverless entry (root FastAPI ASGI)
-- `docs/`: runbook and UAT checklist
+- `app/`: FastAPI app — chat, RAG, auth, WhatsApp, site bot (`site_bot.py`)
+- `static/`: Web UI (`index.html`) + Infigo embed (`infigo-embed.js`)
+- `config/`: guardrails, intents, site bot + Infigo KB seed
+- `scripts/`: DB migrations, seeds, smoke tests, deploy helpers
+- `docs/`: deployment, WhatsApp, Infigo website integration
+- `index.py` + `vercel.json`: Vercel serverless entry
 
 ## Database (Neon)
 
@@ -107,6 +105,7 @@ Use `user_id` as the numeric **customer id** from the seeded data (e.g. `"1"` �
 ## Integration points
 
 - ERP website should call `POST /chat`
+- Marketing site embed (e.g. [Infigo Solutions](https://infigosolutions.com/)) → `POST /chat/public` + `static/infigo-embed.js` — see [`docs/infigo_website_integration.md`](docs/infigo_website_integration.md)
 - WhatsApp provider webhook → `POST /channels/whatsapp`
 - Slack events webhook → `POST /channels/slack`
 
