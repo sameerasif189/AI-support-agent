@@ -86,3 +86,17 @@ WHATSAPP_APP_SECRET = _env("WHATSAPP_APP_SECRET")
 WHATSAPP_API_VERSION = _env("WHATSAPP_API_VERSION", "v21.0")
 # Demo: treat all WhatsApp senders as this seeded customer id (e.g. 1 = cust1 in seed_db)
 WHATSAPP_DEMO_ERP_UID = _env("WHATSAPP_DEMO_ERP_UID", "1")
+
+# Public marketing-site bot (e.g. https://infigosolutions.com/)
+SITE_BOT_ENABLED = _env("SITE_BOT_ENABLED", "true").lower() in ("1", "true", "yes")
+PUBLIC_CHAT_API_KEY = _env("PUBLIC_CHAT_API_KEY", "")
+SITE_COMPANY_NAME = _env("SITE_COMPANY_NAME", "Infigo Solutions")
+SITE_CONTACT_EMAIL = _env("SITE_CONTACT_EMAIL", "")
+SITE_BOOKING_URL = _env("SITE_BOOKING_URL", "")
+SITE_PROPOSAL_URL = _env("SITE_PROPOSAL_URL", "https://infigosolutions.com/")
+CORS_ALLOWED_ORIGINS = _env(
+    "CORS_ALLOWED_ORIGINS",
+    "https://infigosolutions.com,https://www.infigosolutions.com",
+)
+# Register + sync this URL into RAG (HTML or JSON feed)
+SITE_RAG_FEED_URL = _env("SITE_RAG_FEED_URL", "https://infigosolutions.com/")

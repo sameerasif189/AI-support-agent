@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, Response, UploadFile
 import json
 
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -32,6 +33,7 @@ from .models import (
     BudgetSnapshot,
     ChatRequest,
     ChatResponse,
+    PublicChatRequest,
     KnowledgeApiFeedRequest,
     KnowledgeFeedRegisterRequest,
     KnowledgeTextRequest,
@@ -69,6 +71,7 @@ from .repositories import (
 from .services import AnswerCache, BudgetTracker, ERPClient, IntentRouter, LLMClient, SimpleRetriever
 from .local_llm import get_native_engine, native_local_configured
 from .settings import (
+    CORS_ALLOWED_ORIGINS,
     DATABASE_URL,
     GUARDRAILS,
     KNOWLEDGE_WEBHOOK_KEY,
@@ -78,6 +81,7 @@ from .settings import (
     LEARN_EXPAND_WITH_API,
     LEARN_FROM_CHAT,
     LEARN_MIN_CONFIDENCE,
+    PUBLIC_CHAT_API_KEY,
     RAG_RETRIEVAL_MODE,
     RAG_VECTOR_ENABLED,
     LLM_ORDER,
@@ -86,9 +90,24 @@ from .settings import (
     LOCAL_LLM_PRELOAD,
     RAG_FEED_SYNC_ENABLED,
     RAG_FEED_SYNC_TICK_SEC,
+    SITE_BOOKING_URL,
+    SITE_BOT_ENABLED,
+    SITE_COMPANY_NAME,
+    SITE_CONTACT_EMAIL,
+    SITE_PROPOSAL_URL,
+    SITE_RAG_FEED_URL,
     WHATSAPP_APP_SECRET,
     WHATSAPP_DEMO_ERP_UID,
     WHATSAPP_VERIFY_TOKEN,
+)
+from .site_bot import (
+    append_booking_link_if_needed,
+    booking_reply,
+    build_site_erp_context,
+    build_site_system_prompt,
+    build_site_user_prompt,
+    site_public_erp_uid,
+    site_response_meta,
 )
 from .whatsapp_meta import (
     erp_uid_for_whatsapp_sender,
@@ -168,6 +187,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ERP AI Support Agent (RAG + Auth)", version="2.0.0", lifespan=lifespan)
+_cors_origins = [o.strip() for o in CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Site-Api-Key"],
+    )
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -269,12 +297,77 @@ async def _run_chat(
     llm_mode: str,
     session_id: Optional[str] = None,
     app_user_id: Optional[int] = None,
+    site_mode: bool = False,
+    site_visitor: Optional[Dict[str, str]] = None,
 ) -> ChatResponse:
     if len(message) > 4000:
         raise HTTPException(status_code=400, detail="Message too long")
 
+    def _site_meta() -> Dict[str, Optional[str]]:
+        return site_response_meta(message, visitor=site_visitor)
+
+    def _wrap_site(response: ChatResponse, **kwargs: Any) -> ChatResponse:
+        meta = _site_meta()
+        answer = append_booking_link_if_needed(response.answer, message, site_visitor)
+        return response.model_copy(
+            update={
+                "answer": answer,
+                "booking_url": meta.get("booking_url"),
+                "contact_email": meta.get("contact_email"),
+                "proposal_hint": meta.get("proposal_hint"),
+                **kwargs,
+            }
+        )
+
+    if site_mode:
+        booked = booking_reply(message, site_visitor)
+        if booked:
+            return await _finalize_chat(
+                session_id=session_id,
+                app_user_id=None,
+                erp_uid=erp_uid,
+                channel=channel,
+                user_message=message,
+                intent_class="auto_answer",
+                try_learn=False,
+                response=_wrap_site(
+                    ChatResponse(
+                        answer=booked,
+                        confidence=0.95,
+                        action="answered",
+                        est_cost_usd=0.0,
+                        llm_source="rules",
+                        sources_used=0,
+                    )
+                ),
+            )
     intent_class = router.route(message)
     if intent_class == "human_required" and GUARDRAILS["handoff_on_sensitive_intent"]:
+        if site_mode:
+            contact = SITE_CONTACT_EMAIL or "the Contact form on this website"
+            handoff_answer = (
+                f"This needs a human from our team. Please reach us via {contact} "
+                "and describe your request."
+            )
+            return await _finalize_chat(
+                session_id=session_id,
+                app_user_id=None,
+                erp_uid=erp_uid,
+                channel=channel,
+                user_message=message,
+                intent_class=intent_class,
+                try_learn=False,
+                response=_wrap_site(
+                    ChatResponse(
+                        answer=handoff_answer,
+                        confidence=0.35,
+                        action="handoff",
+                        est_cost_usd=0.0,
+                        llm_source="rules",
+                        sources_used=0,
+                    )
+                ),
+            )
         ticket_id = await erp.create_ticket(erp_uid, f"Sensitive request: {message[:140]}")
         return await _finalize_chat(
             session_id=session_id,
@@ -295,14 +388,47 @@ async def _run_chat(
             ),
         )
 
-    customer_id = parse_customer_id(erp_uid) if not is_admin_user(erp_uid) else None
+    customer_id = (
+        None
+        if site_mode
+        else (parse_customer_id(erp_uid) if not is_admin_user(erp_uid) else None)
+    )
     chunks = await retriever.retrieve(
         message,
         int(GUARDRAILS["max_retrieval_chunks"]),
         customer_id=customer_id,
     )
-    is_admin = is_admin_user(erp_uid)
+    is_admin = False if site_mode else is_admin_user(erp_uid)
     confidence = _confidence_from_chunks(len(chunks), intent_class)
+
+    if (
+        site_mode
+        and confidence < float(GUARDRAILS["min_confidence_to_answer"])
+        and GUARDRAILS.get("handoff_on_low_confidence", True)
+    ):
+        contact = SITE_CONTACT_EMAIL or "our Contact page"
+        return await _finalize_chat(
+            session_id=session_id,
+            app_user_id=None,
+            erp_uid=erp_uid,
+            channel=channel,
+            user_message=message,
+            intent_class=intent_class,
+            try_learn=False,
+            response=_wrap_site(
+                ChatResponse(
+                    answer=(
+                        f"I am not fully sure from our help articles. "
+                        f"Please email {contact} or use the contact form and our team will assist you."
+                    ),
+                    confidence=confidence,
+                    action="handoff",
+                    est_cost_usd=0.0,
+                    llm_source="rules",
+                    sources_used=len(chunks),
+                )
+            ),
+        )
 
     if confidence < float(GUARDRAILS["min_confidence_to_answer"]) and GUARDRAILS["handoff_on_low_confidence"]:
         ticket_id = await erp.create_ticket(erp_uid, f"Low confidence handoff: {message[:140]}")
@@ -330,6 +456,16 @@ async def _run_chat(
     if cached:
         cost = _estimate_cost(message, cached) * 0.2
         budget.add(cost)
+        cached_resp = ChatResponse(
+            answer=cached,
+            confidence=round(confidence + 0.05, 2),
+            action="answered",
+            est_cost_usd=round(cost, 6),
+            llm_source="cache",
+            sources_used=len(chunks),
+        )
+        if site_mode:
+            cached_resp = _wrap_site(cached_resp)
         return await _finalize_chat(
             session_id=session_id,
             app_user_id=app_user_id,
@@ -338,26 +474,24 @@ async def _run_chat(
             user_message=message,
             intent_class=intent_class,
             try_learn=False,
-            response=ChatResponse(
-                answer=cached,
-                confidence=round(confidence + 0.05, 2),
-                action="answered",
-                est_cost_usd=round(cost, 6),
-                llm_source="cache",
-                sources_used=len(chunks),
-            ),
+            response=cached_resp,
         )
 
-    erp_ctx = await erp.get_context(erp_uid, message)
-    prompt_ctx = filter_erp_ctx_for_prompt(erp_ctx, is_admin=is_admin)
-    if not is_admin:
+    if site_mode:
+        erp_ctx = build_site_erp_context(site_visitor)
+        prompt_ctx = erp_ctx
+    else:
+        erp_ctx = await erp.get_context(erp_uid, message)
+        prompt_ctx = filter_erp_ctx_for_prompt(erp_ctx, is_admin=is_admin)
+    if not is_admin and not site_mode:
         chunks = filter_kb_chunks_for_customer(
             chunks, erp_ctx=prompt_ctx, message=message, intent_class=intent_class
         )
     kb_context = "\n".join([f"- {c.text}" for c in chunks]) if chunks else "(none)"
 
     if (
-        not is_admin
+        not site_mode
+        and not is_admin
         and intent_class == "erp_lookup"
         and is_personal_billing_query(message)
     ):
@@ -384,18 +518,19 @@ async def _run_chat(
 
     memory_block = ""
     chat_history_block = ""
-    if DATABASE_URL and customer_id is not None and CHAT_MEMORY_IN_PROMPT:
+    if DATABASE_URL and CHAT_MEMORY_IN_PROMPT and (customer_id is not None or (site_mode and session_id)):
         try:
             async with db_connection(timeout=12.0) as conn:
-                mem_lines = await get_customer_memory_lines_conn(
-                    conn, customer_id, message, limit=5
-                )
-                if mem_lines:
-                    memory_block = (
-                        "\nWhat you already know about this customer (use naturally, do not list as 'memory'):\n"
-                        + "\n".join(f"- {line}" for line in mem_lines)
-                        + "\n"
+                if customer_id is not None and not site_mode:
+                    mem_lines = await get_customer_memory_lines_conn(
+                        conn, customer_id, message, limit=5
                     )
+                    if mem_lines:
+                        memory_block = (
+                            "\nWhat you already know about this customer (use naturally, do not list as 'memory'):\n"
+                            + "\n".join(f"- {line}" for line in mem_lines)
+                            + "\n"
+                        )
                 if session_id and CHAT_HISTORY_TURNS > 0:
                     sess_uid = await get_chat_session_erp_uid_conn(conn, session_id)
                     if sess_uid and sess_uid != erp_uid:
@@ -420,46 +555,52 @@ async def _run_chat(
         except Exception as exc:
             logger.warning("Memory/history load skipped: %s", exc)
 
-    system_prompt = (
-        "You are a human customer support agent for an ERP product. "
-        "Reply in plain, professional language as if speaking to the customer in chat.\n"
-        "STRICT RULES:\n"
-        "- Output ONLY the customer-facing message. No meta-commentary.\n"
-        "- NEVER say: 'Based on', 'ERP Context', 'Knowledge base', 'retrieved', 'I found that', "
-        "'internal data', 'policy number', or explain your reasoning.\n"
-        "- NEVER use parenthetical asides about instructions, irrelevant articles, or prefixes.\n"
-        "- Do not name KB article titles unless the customer explicitly asked for policy text.\n"
-        "- First sentence = direct answer with concrete facts (order number, status, amounts).\n"
-        "- Optional: one short sentence with a clear next action. Max 3 sentences total.\n"
-        "- Use recent conversation and remembered customer facts when relevant; do not contradict ERP data.\n"
-        + ("- Start with exactly: Hello Admin,\n" if is_admin else "- Do not use the customer's name in the greeting.\n")
-    )
-    if not is_admin:
-        system_prompt += (
-            "- The customer may ONLY see their own account data. "
-            "Never mention other customers' names, ids, invoices, or orders.\n"
+    if site_mode:
+        system_prompt = build_site_system_prompt(visitor=site_visitor)
+        user_prompt = build_site_user_prompt(
+            message, kb_context, chat_history_block=chat_history_block
         )
-    billing_hint = ""
-    ml = message.lower()
-    if any(w in ml for w in ("bill", "invoice", "highest", "largest", "total amount", "most expensive")):
-        if is_admin:
-            billing_hint = (
-                "\nFor billing/total/highest questions: use highest_order_global / highest_invoice_global "
-                "for cross-customer highs, or scoped fields when a specific customer is implied.\n"
+    else:
+        system_prompt = (
+            "You are a human customer support agent for an ERP product. "
+            "Reply in plain, professional language as if speaking to the customer in chat.\n"
+            "STRICT RULES:\n"
+            "- Output ONLY the customer-facing message. No meta-commentary.\n"
+            "- NEVER say: 'Based on', 'ERP Context', 'Knowledge base', 'retrieved', 'I found that', "
+            "'internal data', 'policy number', or explain your reasoning.\n"
+            "- NEVER use parenthetical asides about instructions, irrelevant articles, or prefixes.\n"
+            "- Do not name KB article titles unless the customer explicitly asked for policy text.\n"
+            "- First sentence = direct answer with concrete facts (order number, status, amounts).\n"
+            "- Optional: one short sentence with a clear next action. Max 3 sentences total.\n"
+            "- Use recent conversation and remembered customer facts when relevant; do not contradict ERP data.\n"
+            + ("- Start with exactly: Hello Admin,\n" if is_admin else "- Do not use the customer's name in the greeting.\n")
+        )
+        if not is_admin:
+            system_prompt += (
+                "- The customer may ONLY see their own account data. "
+                "Never mention other customers' names, ids, invoices, or orders.\n"
             )
-        else:
-            billing_hint = (
-                "\nFor billing/total/highest questions: use highest_order, highest_invoice, "
-                "and orders_total_sum for THIS customer only. Ignore any global or other-account fields.\n"
-            )
-    user_prompt = (
-        f"Customer question:\n{message}\n"
-        f"{chat_history_block}"
-        f"{memory_block}\n"
-        f"Account and order facts (use silently, do not label):\n{erp_ctx_for_json(prompt_ctx, is_admin=is_admin)}\n"
-        f"{billing_hint}\n"
-        f"Help articles (use only if relevant, do not quote titles):\n{kb_context}"
-    )
+        billing_hint = ""
+        ml = message.lower()
+        if any(w in ml for w in ("bill", "invoice", "highest", "largest", "total amount", "most expensive")):
+            if is_admin:
+                billing_hint = (
+                    "\nFor billing/total/highest questions: use highest_order_global / highest_invoice_global "
+                    "for cross-customer highs, or scoped fields when a specific customer is implied.\n"
+                )
+            else:
+                billing_hint = (
+                    "\nFor billing/total/highest questions: use highest_order, highest_invoice, "
+                    "and orders_total_sum for THIS customer only. Ignore any global or other-account fields.\n"
+                )
+        user_prompt = (
+            f"Customer question:\n{message}\n"
+            f"{chat_history_block}"
+            f"{memory_block}\n"
+            f"Account and order facts (use silently, do not label):\n{erp_ctx_for_json(prompt_ctx, is_admin=is_admin)}\n"
+            f"{billing_hint}\n"
+            f"Help articles (use only if relevant, do not quote titles):\n{kb_context}"
+        )
     answer, llm_source = await llm.answer(
         system_prompt,
         user_prompt,
@@ -475,6 +616,16 @@ async def _run_chat(
     cost = _estimate_cost(system_prompt + user_prompt, answer)
     budget.add(cost)
 
+    final = ChatResponse(
+        answer=answer,
+        confidence=round(confidence, 2),
+        action="answered",
+        est_cost_usd=round(cost, 6),
+        llm_source=llm_source,
+        sources_used=len(chunks),
+    )
+    if site_mode:
+        final = _wrap_site(final)
     return await _finalize_chat(
         session_id=session_id,
         app_user_id=app_user_id,
@@ -482,16 +633,10 @@ async def _run_chat(
         channel=channel,
         user_message=message,
         intent_class=intent_class,
-        erp_ctx=erp_ctx,
+        try_learn=not site_mode,
+        erp_ctx=erp_ctx if not site_mode else None,
         sources_used=len(chunks),
-        response=ChatResponse(
-            answer=answer,
-            confidence=round(confidence, 2),
-            action="answered",
-            est_cost_usd=round(cost, 6),
-            llm_source=llm_source,
-            sources_used=len(chunks),
-        ),
+        response=final,
     )
 
 
@@ -988,6 +1133,54 @@ async def chat(
         session_id=req.session_id,
         app_user_id=user["id"] if user else None,
     )
+
+
+def _verify_public_chat_key(x_site_api_key: Optional[str]) -> None:
+    if not SITE_BOT_ENABLED:
+        raise HTTPException(status_code=503, detail="Public site chat is disabled")
+    if PUBLIC_CHAT_API_KEY:
+        if not x_site_api_key or x_site_api_key != PUBLIC_CHAT_API_KEY:
+            raise HTTPException(status_code=401, detail="Invalid or missing X-Site-Api-Key header")
+
+
+@app.post("/chat/public", response_model=ChatResponse)
+async def chat_public(
+    req: PublicChatRequest,
+    x_site_api_key: Optional[str] = Header(default=None, alias="X-Site-Api-Key"),
+) -> ChatResponse:
+    """Marketing-site widget (e.g. infigosolutions.com) — no login; RAG from company KB."""
+    _verify_public_chat_key(x_site_api_key)
+    visitor: Dict[str, str] = {}
+    if req.visitor_name:
+        visitor["name"] = req.visitor_name.strip()
+    if req.visitor_email:
+        visitor["email"] = req.visitor_email.strip()
+    return await _run_chat(
+        erp_uid=site_public_erp_uid(),
+        channel="site",
+        message=req.message,
+        llm_mode=req.llm_mode,
+        session_id=req.session_id,
+        app_user_id=None,
+        site_mode=True,
+        site_visitor=visitor or None,
+    )
+
+
+@app.get("/integrations/site/status")
+async def site_integration_status() -> dict:
+    return {
+        "site_bot_enabled": SITE_BOT_ENABLED,
+        "public_chat_key_required": bool(PUBLIC_CHAT_API_KEY),
+        "company": SITE_COMPANY_NAME,
+        "contact_email_configured": bool(SITE_CONTACT_EMAIL),
+        "booking_url_configured": bool(SITE_BOOKING_URL),
+        "proposal_url": SITE_PROPOSAL_URL or None,
+        "cors_origins": _cors_origins,
+        "embed_script": "/static/infigo-embed.js",
+        "chat_endpoint": "/chat/public",
+        "database": database_ready(),
+    }
 
 
 @app.get("/integrations/whatsapp/status")

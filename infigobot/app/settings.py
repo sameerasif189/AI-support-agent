@@ -56,3 +56,16 @@ CORS_ALLOWED_ORIGINS = _env(
     "CORS_ALLOWED_ORIGINS",
     "https://infigosolutions.com,https://www.infigosolutions.com",
 )
+# Content source (pick one via env):
+# - SITE_JSON_URL — public JSON on React site, e.g. https://infigosolutions.com/content.json (scenario 2)
+# - SITE_RUNTIME_FETCH_ENABLED + SITE_FETCH_URL — live HTML fetch (scenario 1)
+# - SITE_CONTENT_ENABLED + SITE_CONTENT_JSON — bundled file in API repo
+SITE_JSON_URL = _env("SITE_JSON_URL", "")
+SITE_RUNTIME_FETCH_ENABLED = _env("SITE_RUNTIME_FETCH_ENABLED", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+SITE_FETCH_URL = _env("SITE_FETCH_URL", "https://infigosolutions.com/")
+SITE_CONTENT_ENABLED = _env("SITE_CONTENT_ENABLED", "false").lower() in ("1", "true", "yes")
+SITE_CONTENT_JSON = _env("SITE_CONTENT_JSON", "config/infigo_site_content.json")

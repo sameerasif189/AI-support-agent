@@ -23,10 +23,19 @@ class LoginResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     user_id: Optional[str] = None
-    channel: Literal["web", "whatsapp", "slack"] = "web"
+    channel: Literal["web", "whatsapp", "slack", "site"] = "web"
     message: str = Field(min_length=1, max_length=4000)
     session_id: Optional[str] = None
     llm_mode: Literal["auto", "api", "local"] = "auto"
+
+
+class PublicChatRequest(BaseModel):
+    """Visitor chat from embedded widget on marketing site (no login)."""
+    message: str = Field(min_length=1, max_length=4000)
+    session_id: Optional[str] = None
+    visitor_name: Optional[str] = Field(default=None, max_length=120)
+    visitor_email: Optional[str] = Field(default=None, max_length=254)
+    llm_mode: Literal["auto", "api", "local"] = "api"
 
 
 class ChatResponse(BaseModel):
@@ -40,6 +49,9 @@ class ChatResponse(BaseModel):
     session_id: Optional[str] = None
     kb_learned: bool = False
     memory_updated: bool = False
+    booking_url: Optional[str] = None
+    contact_email: Optional[str] = None
+    proposal_hint: Optional[str] = None
 
 
 class RetrievalChunk(BaseModel):

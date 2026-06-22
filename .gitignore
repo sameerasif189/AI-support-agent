@@ -1,14 +1,41 @@
+# Secrets / env
 .env
+.env.local
+vercel.env
+
+# Vercel
 .vercel/
-models/*.gguf
-Client_*.pdf
-*.docx
+infigobot/.vercel/
+
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
 .Python
 .venv/
 venv/
+*.egg-info/
+
+# Node
+node_modules/
+
+# Editor / OS
 .idea/
 .vscode/
 *.log
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+
+# Local models / data
+models/*.gguf
+models/*.bin
+models/*.pt
+*.sqlite
+*.sqlite3
+
+# Large customer docs (kept locally, not pushed)
+*.pdf
+*.docx

@@ -34,7 +34,19 @@ Test: `POST http://127.0.0.1:8000/chat/public` with header `X-Site-Api-Key` and 
 3. Env vars from `.env.example` (Production).
 4. Deploy → use URL in React embed (`docs/examples/InfigoChatWidget.tsx`).
 
-## React site
+## Site content (no database)
+
+**Scenario 2 (JSON on site):** see [`docs/DEPLOY_JSON_AND_WIDGET.md`](docs/DEPLOY_JSON_AND_WIDGET.md)
+
+```env
+SITE_JSON_URL=https://infigosolutions.com/content.json
+SITE_RUNTIME_FETCH_ENABLED=false
+SITE_CONTENT_ENABLED=false
+```
+
+Infigo adds `public/content.json` from `docs/examples/public-content.json` and mounts the chat widget on the main layout.
+
+## React widget
 
 ```env
 VITE_INFIGO_CHAT_API_URL=https://your-app.vercel.app
@@ -42,3 +54,7 @@ VITE_INFIGO_CHAT_API_KEY=same as PUBLIC_CHAT_API_KEY
 ```
 
 Mount `<InfigoChatWidget />` once in `App.tsx`.
+
+## Local `.env`
+
+Copy `.env.example` to `.env` or use the generated `.env` (gitignored). Never commit `.env`.

@@ -39,7 +39,12 @@ from .settings import (
     SITE_BOT_ENABLED,
     SITE_COMPANY_NAME,
     SITE_CONTACT_EMAIL,
+    SITE_CONTENT_ENABLED,
+    SITE_CONTENT_JSON,
+    SITE_FETCH_URL,
+    SITE_JSON_URL,
     SITE_PROPOSAL_URL,
+    SITE_RUNTIME_FETCH_ENABLED,
 )
 from .site_bot import (
     append_booking_link_if_needed,
@@ -50,6 +55,7 @@ from .site_bot import (
     site_public_erp_uid,
     site_response_meta,
 )
+from .site_content import resolve_site_context
 
 logger = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -197,6 +203,20 @@ async def run_site_chat(
         return await _persist(session_id=session_id, erp_uid=erp_uid, message=message, response=resp, intent_class=intent_class)
 
     kb_context = "\n".join(f"- {c.text}" for c in chunks) if chunks else "(none)"
+    live, content_source = await resolve_site_context(
+        json_url=SITE_JSON_URL,
+        runtime_enabled=SITE_RUNTIME_FETCH_ENABLED,
+        runtime_url=SITE_FETCH_URL,
+        bundled_enabled=SITE_CONTENT_ENABLED,
+        bundled_path=SITE_CONTENT_JSON,
+    )
+    if live:
+        label = {
+            "json_url": "Official site content (public content.json)",
+            "bundled_json": "Official site content (bundled JSON in API)",
+            "runtime_html": "Live website text (HTML fetch)",
+        }.get(content_source, "Site content")
+        kb_context = f"{label}:\n{live[:9000]}\n\nFallback hints:\n{kb_context}"
     chat_history_block = ""
     if DATABASE_URL and session_id and CHAT_HISTORY_TURNS > 0:
         try:
@@ -262,8 +282,22 @@ async def root() -> dict:
         "service": "Infigo Site Bot API",
         "chat": "POST /chat/public",
         "embed": "/static/infigo-embed.js",
+        "site_json": "/public/site-content.json",
         "health": "/health",
     }
+
+
+@app.get("/public/site-content.json")
+async def public_site_content_json() -> JSONResponse:
+    """Copy of bundled content — host the same file on React: public/content.json"""
+    from pathlib import Path
+    import json
+
+    p = Path(__file__).resolve().parent.parent / SITE_CONTENT_JSON
+    if not p.is_file():
+        p = Path(__file__).resolve().parent.parent / "config" / "infigo_site_content.json"
+    with open(p, "r", encoding="utf-8") as f:
+        return JSONResponse(json.load(f))
 
 
 @app.get("/health")
@@ -289,6 +323,20 @@ async def site_status() -> dict:
         "contact_email_configured": bool(SITE_CONTACT_EMAIL),
         "booking_url_configured": bool(SITE_BOOKING_URL),
         "proposal_url": SITE_PROPOSAL_URL,
+        "content_mode": (
+            "json_url"
+            if SITE_JSON_URL
+            else "bundled_json"
+            if SITE_CONTENT_ENABLED
+            else "runtime_html"
+            if SITE_RUNTIME_FETCH_ENABLED
+            else "fallback_only"
+        ),
+        "site_json_url": SITE_JSON_URL or None,
+        "runtime_fetch_enabled": SITE_RUNTIME_FETCH_ENABLED,
+        "runtime_fetch_url": SITE_FETCH_URL or None,
+        "site_content_json": SITE_CONTENT_JSON,
+        "site_content_enabled": SITE_CONTENT_ENABLED,
         "cors_origins": _cors_origins,
         "embed_script": "/static/infigo-embed.js",
     }

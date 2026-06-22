@@ -1,0 +1,13 @@
+AI Chat Widget — Implementation Requirements (Infigo Solutions)
+================================================================
+
+Full handoff PDF (send to Infigo):
+  Infigo_Team_Implementation_Requirements.pdf  (repo root)
+  infigobot/docs/Infigo_Team_Implementation_Requirements.pdf  (same file)
+
+Regenerate PDF:
+  pip install fpdf2
+  python infigobot/scripts/generate_infigo_requirements_pdf.py
+
+Markdown reference (same content):
+  infigobot/docs/HANDOFF_FOR_INFIGO_TEAM.md
